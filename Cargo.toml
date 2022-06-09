@@ -1,0 +1,17 @@
+[package]
+name = "envio_emails"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+configparser = "3.0.0"
+diesel = { version = "1.4.4", features = ["mysql","chrono","serde_json"] }
+chrono = "0.4"
+
+serde = {version = "1.0.136",features = ["derive"]}
+serde_json = "1.0.79"
+
+lettre = "0.10.0-rc.4"
+
