@@ -2,7 +2,7 @@
 use serde::Deserialize;
 use serde_json::from_str as JSONparse;
 
-use crate::models::Ocor;
+use crate::models::{Ocor,OcorSoe};
 
 const HTMLHEAD: &str = r#"<!DOCTYPE html>
 <html lang="pt-BR">
@@ -42,7 +42,7 @@ const HEADROW: &str = r#"
 "#;
 
 trait HTMLTable{
-	fn to_html(&self, info:ExtraInfo)->String;
+	fn to_html(&self, info:&ExtraInfo)->String;
 }
 
 #[derive(Deserialize)]
@@ -54,14 +54,14 @@ struct FaltasTabela{
 }
 
 impl HTMLTable for FaltasTabela{
-	fn to_html(&self, info:ExtraInfo)->String {
+	fn to_html(&self, info:&ExtraInfo)->String {
 		let mut tabela = String::from("<tr><th colspan = 4>CORRENTES DE FALTA</th></tr>\n");
 		tabela.push_str(HEADROW);
 
-		tabela.push_str(&make_row(&info, &format!("Corrente de falta Fase A = {}",self.fase_a)));
-		tabela.push_str(&make_row(&info, &format!("Corrente de falta Fase B = {}",self.fase_b)));
-		tabela.push_str(&make_row(&info, &format!("Corrente de falta Fase C = {}",self.fase_c)));
-		tabela.push_str(&make_row(&info, &format!("Corrente de falta Neutro = {}",self.fase_n)));
+		tabela.push_str(&make_row(info, &format!("Corrente de falta Fase A = {}",self.fase_a)));
+		tabela.push_str(&make_row(info, &format!("Corrente de falta Fase B = {}",self.fase_b)));
+		tabela.push_str(&make_row(info, &format!("Corrente de falta Fase C = {}",self.fase_c)));
+		tabela.push_str(&make_row(info, &format!("Corrente de falta Neutro = {}",self.fase_n)));
 		tabela
 	}
 }
@@ -77,42 +77,64 @@ struct CondPrePosTabela{
 }
 
 impl HTMLTable for CondPrePosTabela{
-	fn to_html(&self, info:ExtraInfo)->String {
+	fn to_html(&self, info: &ExtraInfo)->String {
 		let mut tabela = String::from("<tr><th colspan = 4>CONDIÇÃO OPERAÇÃO PRÉ-OCORRÊNCIA</th></tr>\n");
 		tabela.push_str(HEADROW);
 
-		tabela.push_str(&make_row(&info, &format!("Potência Ativa = {}",self.potencia_ativa)));
-		tabela.push_str(&make_row(&info, &format!("Corrente na Fase A = {}",self.fase_a)));
-		tabela.push_str(&make_row(&info, &format!("Corrente na Fase B = {}",self.fase_b)));
-		tabela.push_str(&make_row(&info, &format!("Corrente na Fase C = {}",self.fase_c)));
-		tabela.push_str(&make_row(&info, &format!("Corrente no Neutro = {}",self.fase_n)));
+		tabela.push_str(&make_row(info, &format!("Potência Ativa = {}",self.potencia_ativa)));
+		tabela.push_str(&make_row(info, &format!("Corrente na Fase A = {}",self.fase_a)));
+		tabela.push_str(&make_row(info, &format!("Corrente na Fase B = {}",self.fase_b)));
+		tabela.push_str(&make_row(info, &format!("Corrente na Fase C = {}",self.fase_c)));
+		tabela.push_str(&make_row(info, &format!("Corrente no Neutro = {}",self.fase_n)));
 		tabela
 	}
 }
 
-struct ExtraInfo{
-	hora_evento: chrono::NaiveDate,
-	hora_gravacao: chrono::NaiveDate,
-	operador: Option<String>
+struct ExtraInfo<'a>( &'a chrono::NaiveDateTime, &'a chrono::NaiveDateTime);
+
+impl<'a> ExtraInfo<'a>{
+	fn new(ocor: &'a Ocor)->Self{
+		ExtraInfo ( &ocor.hora_ini,  &ocor.hora_fim)
+	} 
 }
 
+
+pub fn parse_soe(soe:Vec<OcorSoe>)->String{
+	let mut tabela = String::from("<tr><th colspan = 4>EVENTOS</th></tr>\n");
+	tabela.push_str(HEADROW);
+
+	for val in soe{
+		tabela.push_str(&format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+			val.hora_ini.unwrap_or(chrono_default()),
+			val.mensagem.as_ref().unwrap_or(&String::new()),
+			val.hora_fim.unwrap_or(chrono_default()),
+			val.actor_id.as_ref().unwrap_or(&String::new()),
+		));
+	}
+	tabela
+}
 
 fn make_row(info:&ExtraInfo,line: &str)->String{ 
-	if let Some(op) = &info.operador{
-		return format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
-			info.hora_evento, line, info.hora_gravacao, op);
-	}else{
-		return format!("<tr><td>{}</td><td>{}</td><td>{}</td><td></td></tr>\n",
-			info.hora_evento, line, info.hora_gravacao);
-	}
+	format!("<tr><td>{}</td><td>{}</td><td>{}</td><td></td></tr>\n",info.0, line, info.1)
 }
 
-pub fn build_message(caso: Ocor,soe: String)->Result<String, Box<dyn std::error::Error>>{
+fn chrono_default()->chrono::NaiveDateTime{
+	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
+}
+
+pub fn build_message(caso: Ocor,soe: Vec<OcorSoe>)->Result<String, Box<dyn std::error::Error>>{
 	let mut result = String::from(HTMLHEAD);
+	let info = ExtraInfo::new(&caso);
 
+	let pre_ocor:CondPrePosTabela = JSONparse(caso.condpre.as_ref().unwrap())?;
+	let pos_ocor:CondPrePosTabela = JSONparse(caso.condpos.as_ref().unwrap())?;
+	let faltas:FaltasTabela = JSONparse(caso.faltas.as_ref().unwrap())?;
 
-
-
+	result.push_str(&pre_ocor.to_html(&info));
+	result.push_str(&faltas.to_html(&info));
+	result.push_str(&parse_soe(soe));
+	result.push_str(&pos_ocor.to_html(&info));
+	
 	result.push_str(HTMLTAIL);
 
 	return Ok(result);

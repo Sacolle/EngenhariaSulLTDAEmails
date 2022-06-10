@@ -23,7 +23,7 @@ pub struct Ocor{
 #[derive(Queryable)]
 pub struct OcorSoe{
 	pub id: i32,
-	pub oco_id: i32,
+	pub oco_id: Option<i32>,
 	pub hora_ini: Option<chrono::NaiveDateTime>,
 	pub hora_fim: Option<chrono::NaiveDateTime>,
 	pub complemento: Option<String>,

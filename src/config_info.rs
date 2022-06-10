@@ -14,9 +14,9 @@ impl DbConfig {
 		let db = config.get(section,"DB").unwrap();
 		
 		let url = format!("mysql://{}:{}@{}/",
-			config.get(section, "URL").unwrap(),
 			config.get(section, "USER").unwrap(),
 			config.get(section, "SENHA").unwrap(),
+			config.get(section, "URL").unwrap(),
 		);		
 
 		Ok(DbConfig { url, db })
@@ -55,7 +55,11 @@ pub fn get_email_creds()->String{
 #[cfg(test)]
 mod tests{
     use super::*;
-
+	#[test]
+	fn valid_base_url(){
+		let db = DbConfig::init("TEST_SECTION").unwrap();
+		assert_eq!("mysql://user:senha@google.com/",&db.url);
+	}
 	#[test]
 	fn valid_ini_file(){
 		let mut config = Ini::new();
@@ -73,7 +77,7 @@ mod tests{
 	#[test]
 	fn valid_iterator(){
 		let db = DbConfig::init("CHAVES_DB_LOCAL").unwrap();
-		let test_vec = vec!["casa", "sala", "quarto", "banheiro", "sala_de_estar"];
+		let test_vec = vec!["test_db"];
 		
 		for url in db.make_table_urls().zip(test_vec){
 			assert_eq!(url.0,format!("{}{}",&db.url,url.1));
