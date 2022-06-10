@@ -1,43 +1,33 @@
-use std::collections::HashMap;
-
 use configparser::ini::Ini;
+use std::error::Error;
 
 pub struct DbConfig{
 	pub url: String,
 	pub db: String
 }
 
-enum DbTables{
-	Single(String),
-	Multi(Vec<String>)
-}
-
 impl DbConfig {
-	pub fn new(map: &HashMap<String, Option<String>>) -> Self{
-		let db_url = map.get("URL").unwrap().as_ref().unwrap();
-		let user = map.get("USER").unwrap().as_ref().unwrap();
-		let senha = map.get("SENHA").unwrap().as_ref().unwrap();
-		
-		//clonando o valor no momento, não sei se é necessario um método mais eficiente
-		//acho q não
-		let db = map.get("DB").unwrap().as_ref().unwrap().to_owned();
-		
-		let url = format!("mysql://{}:{}@{}/",user,senha,db_url);		
+	pub fn init(section:&str) -> Result<DbConfig,Box<dyn Error>>{
+		let mut config = Ini::new();
+		config.load("config.ini")?;
 
-		DbConfig { url, db }
+		let db = config.get(section,"DB").unwrap();
+		
+		let url = format!("mysql://{}:{}@{}/",
+			config.get(section, "URL").unwrap(),
+			config.get(section, "USER").unwrap(),
+			config.get(section, "SENHA").unwrap(),
+		);		
+
+		Ok(DbConfig { url, db })
 	}
-	pub fn table_url(&self)->String{
-		format!("{}{}",self.url,self.db)
+	pub fn make_table_urls<'a>(&'a self)-> impl Iterator<Item = String> + 'a {
+		self.db
+			.split(',')
+			.map(|e|format!("{}{}",self.url,e.trim()))
 	}
 }
 
-
-pub fn parse_db_keys()->Result<DbConfig,Box<dyn std::error::Error>>{
-	let mut config = Ini::new();
-	let map = config.load("config.ini")?;
-
-	Ok(DbConfig::new(map.get("CHAVES_DB_LOCAL").unwrap()))
-}
 
 pub fn parse_email()->String{
 	let mut config = Ini::new();
@@ -59,4 +49,35 @@ pub fn get_email_creds()->String{
 		Some(r) => r,
 		None => panic!()
 	}
+}
+
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+
+	#[test]
+	fn valid_ini_file(){
+		let mut config = Ini::new();
+		let map = config.load("config.ini");
+		assert!(map.is_ok());
+		let values = map.unwrap();
+		for fields in values.iter(){
+			for keys in fields.1.iter(){
+				if !keys.1.is_some(){
+					panic!("campo {} não contém valor",keys.0);
+				}
+			}
+		}
+	}
+	#[test]
+	fn valid_iterator(){
+		let db = DbConfig::init("CHAVES_DB_LOCAL").unwrap();
+		let test_vec = vec!["casa", "sala", "quarto", "banheiro", "sala_de_estar"];
+		
+		for url in db.make_table_urls().zip(test_vec){
+			assert_eq!(url.0,format!("{}{}",&db.url,url.1));
+		}
+	}
+
 }
