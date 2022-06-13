@@ -140,8 +140,6 @@ pub fn build_message(caso: Ocor,soe: Vec<OcorSoe>)->Result<String, Box<dyn Error
 	let pos_ocor:CondPrePosTabela = JSONparse(caso.condpos.as_ref().unwrap())?;
 	let faltas:FaltasTabela = JSONparse(caso.faltas.as_ref().unwrap())?;
 
-	println!("faltas: {:?}\npre: {:?}\n pos: {:?}",&faltas,&pre_ocor,&pos_ocor);
-
 	result.push_str(&pre_ocor.to_html(&info));
 	result.push_str(&faltas.to_html(&info));
 	result.push_str(&parse_soe(soe));
@@ -164,7 +162,6 @@ mod tests{
 		
 		match pre_ocor{
 			Ok(val)=>{
-				println!("Parse com sucesso");
 				assert_eq!(val.fase_a,1.5);
 				assert_eq!(val.fase_b,1.5);
 				assert_eq!(val.fase_c,1.5);
@@ -193,7 +190,7 @@ mod tests{
 
 	#[test]
 	fn proper_hmtl(){
-		let mut f = fs::File::create("./modelos/test_res.html").unwrap();
+		let mut f = fs::File::create("./testres/tabela_para_envio.html").unwrap();
 
 		let caso = Ocor {
 			id: 1,

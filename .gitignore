@@ -1,0 +1,5 @@
+/target
+*.ini
+*.env
+Cargo.lock
+/testres
