@@ -108,7 +108,6 @@ impl<'a> ExtraInfo<'a>{
 	} 
 }
 
-
 pub fn parse_soe(soe:Vec<OcorSoe>)->String{
 	let mut tabela = String::from("<tr><th colspan = 4>EVENTOS</th></tr>\n");
 	tabela.push_str(HEADROW);
