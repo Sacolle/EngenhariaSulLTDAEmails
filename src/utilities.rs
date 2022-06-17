@@ -28,7 +28,10 @@ pub fn send_email(destino:&str, html:String) -> Result<(), Box<dyn std::error::E
 			),
 		)?;
 	
-	let creds = Credentials::new("joaosilva11235813@gmail.com".to_string(), crate::config_info::get_email_creds());
+	let creds = Credentials::new(
+		"joaosilva11235813@gmail.com".to_string(),
+		crate::config_info::get_email_creds()
+	);
 
 	// Open a remote connection to gmail
 	let mailer = SmtpTransport::relay("smtp.gmail.com")?
