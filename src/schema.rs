@@ -1,4 +1,16 @@
 table! {
+    cadastroemails (EmailId) {
+        EmailId -> Integer,
+        Empresa -> Nullable<Char>,
+        EmailAddr -> Nullable<Char>,
+        EmailName -> Nullable<Char>,
+        EnvRelig -> Nullable<Char>,
+        EnvLockout -> Nullable<Char>,
+        EnvNormaliz -> Nullable<Char>,
+    }
+}
+
+table! {
     ocorrencia (OcoID) {
         OcoID -> Integer,
         SE -> Nullable<Char>,
@@ -34,6 +46,7 @@ table! {
 }
 
 allow_tables_to_appear_in_same_query!(
+    cadastroemails,
     ocorrencia,
     ocorrencia_soe,
 );

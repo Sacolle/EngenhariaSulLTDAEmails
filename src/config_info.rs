@@ -21,14 +21,16 @@ impl DbConfig {
 
 		Ok(DbConfig { url, db })
 	}
-	pub fn make_table_urls<'a>(&'a self)-> impl Iterator<Item = String> + 'a {
+	pub fn make_table_urls<'a>(&'a self)-> impl Iterator<Item = (String,String)> + 'a {
 		self.db
 			.split(',')
-			.map(|e|format!("{}{}",self.url,e.trim()))
+			.map(|e|
+				(self.url.clone(), e.trim().to_string())
+			)
 	}
 }
 
-
+/*
 pub fn parse_email()->String{
 	let mut config = Ini::new();
 	//se não carregar, checa as std::env::vars, se tb nao funciona, da panico
@@ -38,17 +40,16 @@ pub fn parse_email()->String{
 		Some(r) => r,
 		None => panic!()
 	}
-}
+} */
 
-pub fn get_email_creds()->String{
+pub fn get_email_sender()->(String,String,String){
 	let mut config = Ini::new();
 	//se não carregar, checa as std::env::vars, se tb nao funciona, da panico
 	config.load("config.ini").expect("Não tem config.ini");
 	
-	match config.get("GMAIL_CREDS","senha"){
-		Some(r) => r,
-		None => panic!()
-	}
+	(config.get("GMAIL_CREDS","user").unwrap(),
+	config.get("GMAIL_CREDS","senha").unwrap(),
+	config.get("GMAIL_CREDS","relay").unwrap())
 }
 
 
@@ -80,7 +81,7 @@ mod tests{
 		let test_vec = vec!["test_db"];
 		
 		for url in db.make_table_urls().zip(test_vec){
-			assert_eq!(url.0,format!("{}{}",&db.url,url.1));
+			assert_eq!((url.0).1,url.1.to_owned());
 		}
 	}
 

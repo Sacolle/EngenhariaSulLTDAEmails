@@ -30,3 +30,14 @@ pub struct OcorSoe{
 	pub mensagem: Option<String>,
 	pub actor_id: Option<String>
 }
+
+#[derive(Queryable)]
+pub struct Email{
+	pub id: i32,
+	pub empresa: Option<String>,
+	pub email_adrs: Option<String>,
+	pub email_name: Option<String>,
+	pub env_relig: Option<String>,
+	pub env_lockout : Option<String>,
+	pub env_normaliz: Option<String>,
+}

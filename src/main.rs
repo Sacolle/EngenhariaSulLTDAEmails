@@ -7,37 +7,47 @@ mod models;
 #[macro_use]
 extern crate diesel;
 
-use models::{Ocor,OcorSoe};
-use config_info::{parse_email,DbConfig};
+use models::{Ocor,OcorSoe, Email};
+use config_info::DbConfig;
 use diesel::prelude::*;
 use message_builder::build_message;
 use utilities::send_email;
 use schema::ocorrencia::dsl as ocortb;
 use schema::ocorrencia_soe::dsl as soetb;
+use schema::cadastroemails::dsl as emails;
 
 
 fn main(){
 	let db = DbConfig::init("CHAVES_DB_LOCAL").expect("Falha no .ini");
 	
-	for table_url in db.make_table_urls(){
-		if let Err(e) = process_table(&table_url){
+	for (url,table) in db.make_table_urls(){
+		if let Err(e) = process_table(&url,&table){
 			//TODO: log the errors
 			println!("{:?}",e);
 		}else{
-			println!("Tabela com link:\n{}\nAcessada com sucesso",&table_url);
+			println!("Tabela no server: {}\nCom link:{}\nAcessada com sucesso",&url,&table);
 		}
 	}
 }
-fn process_table(table_url:&str)->Result<(),Box<dyn std::error::Error>>{
-	let connec = MysqlConnection::establish(table_url)?;
+
+
+fn process_table(url:&str,table:&str)->Result<(),Box<dyn std::error::Error>>{
+	let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
 
 	let results = ocortb::ocorrencia
 		.filter(ocortb::EmailSended.eq("f"))
 		.limit(10)
 		.load::<Ocor>(&connec)?;
 
-	let destinatario = parse_email(); //TODO: acessar a db de emails para dar fetch no email
+	//TODO: acessar a db de emails para dar fetch no email
+	//let destinatario = parse_email(); 
 
+	let empresa_emails = table.split('_').nth(1).unwrap();
+
+	let destinos = emails::cadastroemails
+		.filter(emails::Empresa.eq(empresa_emails))
+		.load::<Email>(&connec)?;
+	
 	for instance in results{
 		let inst_id = instance.id;
 
@@ -45,7 +55,7 @@ fn process_table(table_url:&str)->Result<(),Box<dyn std::error::Error>>{
 			.filter(soetb::OcoID.eq(inst_id))
 			.load::<OcorSoe>(&connec)?;
 
-		send_email(&destinatario, build_message(instance,ocor_soe)?)?;
+		send_email(&destinos, build_message(instance,ocor_soe)?)?;
 
 		diesel::update(ocortb::ocorrencia.find(inst_id))
 			.set(ocortb::EmailSended.eq("t")).execute(&connec)?;
@@ -61,17 +71,17 @@ mod tests{
 	fn testing_connect()->Result<(),Box<dyn Error>>{
 		let db = DbConfig::init("CHAVES_DB_LOCAL")?;
 
-		for table_url in db.make_table_urls(){
-			MysqlConnection::establish(&table_url)?;
+		for (url,table) in db.make_table_urls(){
+			MysqlConnection::establish(&format!("{}{}",url,table))?;
 		}
 		Ok(())
 	}
 	#[test]
-	fn is_query_data_wroking()->Result<(),Box<dyn Error>>{
+	fn is_query_data_working()->Result<(),Box<dyn Error>>{
 		let db = DbConfig::init("CHAVES_DB_LOCAL")?;
 
-		let table_url = db.make_table_urls().next().unwrap();
-		let connec = MysqlConnection::establish(&table_url)?;
+		let (url,table) = db.make_table_urls().next().unwrap();
+		let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
 
 		let results = ocortb::ocorrencia
 			.filter(ocortb::EmailSended.eq("f"))
@@ -81,13 +91,32 @@ mod tests{
 		Ok(())
 	}
 	#[test]
+	fn is_query_emails_working()->Result<(),Box<dyn Error>>{
+		let db = DbConfig::init("CHAVES_DB_LOCAL")?;
+
+		let (url,table) = db.make_table_urls().next().unwrap();
+		let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
+
+		let empresa_emails = table.split('_').nth(1).unwrap();
+		println!("pegando emails da empresa: {}",empresa_emails);
+
+		let destinos = emails::cadastroemails
+			.filter(emails::Empresa.eq(empresa_emails))
+			.load::<Email>(&connec)?;
+
+		assert!(!destinos.is_empty());
+		println!("id do primeiro valor: {:?}",destinos[0].email_adrs.clone().unwrap());
+		Ok(())
+	}
+
+	#[test]
 	fn build_table_from_query()->Result<(),Box<dyn std::error::Error>>{
 		use std::{fs,io::Write};
 
 		let db = DbConfig::init("CHAVES_DB_LOCAL")?;
 
-		let table_url = db.make_table_urls().next().unwrap();
-		let connec = MysqlConnection::establish(&table_url)?;
+		let (url,table) = db.make_table_urls().next().unwrap();
+		let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
 
 		let results = ocortb::ocorrencia
 			.filter(ocortb::EmailSended.eq("f"))
@@ -106,11 +135,33 @@ mod tests{
 		}
 		Ok(())
 	}
-	#[test]
-	fn is_send_email_working()->Result<(),Box<dyn std::error::Error>>{
-		let destinatario = parse_email(); //TODO: acessar a db de emails para dar fetch no email
+	//#[test]
+	#[allow(dead_code)]
+	fn is_send_email_test_base()->Result<(),Box<dyn std::error::Error>>{
+		use lettre::transport::smtp::authentication::Credentials;
+		use lettre::{Message, SmtpTransport, Transport };
+		
+		let (user,senha,_relay) = crate::config_info::get_email_sender();
 
-		send_email(&destinatario, String::from("Test"))?;
+		let email = Message::builder()
+			.from(format!("Engenharia <{}>",&user).parse()?)
+			.to("Zampierri <vzampieri@gmail.com>".parse()?)
+			.subject("Email teste sem HTML")
+			.body(String::from("Aí estas meu cacíque"))?;
+
+		let creds = Credentials::new(user,senha);
+
+		// Open a remote connection to gmail
+		let mailer = SmtpTransport::starttls_relay("smtp.office365.com")?
+			.credentials(creds)
+			.build();
+
+
+		// Send the email
+		match mailer.send(&email) {
+			Ok(_) => println!("Email sent successfully!"),
+			Err(e) => panic!("Could not send email: {:?}", e),
+		}	
 		Ok(())
 	}
 }
