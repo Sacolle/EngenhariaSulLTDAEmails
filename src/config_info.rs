@@ -1,6 +1,9 @@
 use configparser::ini::Ini;
 use std::error::Error;
 
+
+use crate::error::MissignFieldError;
+
 pub struct DbConfig{
 	pub url: String,
 	pub db: String
@@ -30,28 +33,27 @@ impl DbConfig {
 	}
 }
 
-/*
-pub fn parse_email()->String{
-	let mut config = Ini::new();
-	//se não carregar, checa as std::env::vars, se tb nao funciona, da panico
-	config.load("config.ini").expect("Não tem config.ini");
-	
-	match config.get("EMAIL_ADRS","email"){
-		Some(r) => r,
-		None => panic!()
-	}
-} */
-
-pub fn get_email_sender()->(String,String,String){
-	let mut config = Ini::new();
-	//se não carregar, checa as std::env::vars, se tb nao funciona, da panico
-	config.load("config.ini").expect("Não tem config.ini");
-	
-	(config.get("GMAIL_CREDS","user").unwrap(),
-	config.get("GMAIL_CREDS","senha").unwrap(),
-	config.get("GMAIL_CREDS","relay").unwrap())
+pub struct EmailSender{
+	pub nome: String,
+	pub email: String,
+	pub senha: String
 }
 
+impl EmailSender{
+	pub fn get(section:&str)->Result<Self,Box<dyn Error>>{
+		let mut config = Ini::new();
+		config.load("config.ini")?;
+
+		let nome= config.get(section,"nome")
+			.ok_or(MissignFieldError::new("nome"))?;
+		let email = config.get(section,"email")
+			.ok_or(MissignFieldError::new("email"))?;
+		let senha = config.get(section,"senha")
+			.ok_or(MissignFieldError::new("senha"))?;
+
+		Ok(EmailSender { nome ,email, senha })
+	}
+}
 
 #[cfg(test)]
 mod tests{

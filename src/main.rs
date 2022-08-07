@@ -1,6 +1,7 @@
 mod utilities;
 mod config_info;
 mod message_builder;
+mod error;
 mod schema;
 mod models;
 
@@ -8,10 +9,11 @@ mod models;
 extern crate diesel;
 
 use models::{Ocor,OcorSoe, Email};
-use config_info::DbConfig;
+use config_info::{DbConfig,EmailSender};
 use diesel::prelude::*;
 use message_builder::build_message;
 use utilities::send_email;
+use error::{TableProcessError,MissignFieldError};
 use schema::ocorrencia::dsl as ocortb;
 use schema::ocorrencia_soe::dsl as soetb;
 use schema::cadastroemails::dsl as emails;
@@ -19,19 +21,18 @@ use schema::cadastroemails::dsl as emails;
 
 fn main(){
 	let db = DbConfig::init("CHAVES_DB_LOCAL").expect("Falha no .ini");
-	
+	let email = EmailSender::get("GMAIL_CREDS").expect("Falha no .ini");
 	for (url,table) in db.make_table_urls(){
-		if let Err(e) = process_table(&url,&table){
+		if let Err(e) = process_table(&url,&table,&email){
 			//TODO: log the errors
-			println!("{:?}",e);
+			println!("Failure at table {}:\n{}",&table,e);
 		}else{
 			println!("Tabela no server: {}\nCom link:{}\nAcessada com sucesso",&url,&table);
 		}
 	}
 }
 
-
-fn process_table(url:&str,table:&str)->Result<(),Box<dyn std::error::Error>>{
+fn process_table(url:&str,table:&str,sender:&EmailSender)->Result<(),TableProcessError>{
 	let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
 
 	let results = ocortb::ocorrencia
@@ -39,10 +40,8 @@ fn process_table(url:&str,table:&str)->Result<(),Box<dyn std::error::Error>>{
 		.limit(10)
 		.load::<Ocor>(&connec)?;
 
-	//TODO: acessar a db de emails para dar fetch no email
-	//let destinatario = parse_email(); 
-
-	let empresa_emails = table.split('_').nth(1).unwrap();
+	let empresa_emails = table.split('_').nth(1)
+		.ok_or(MissignFieldError::new("Nome da Db é malformado"))?;
 
 	let destinos = emails::cadastroemails
 		.filter(emails::Empresa.eq(empresa_emails))
@@ -55,13 +54,18 @@ fn process_table(url:&str,table:&str)->Result<(),Box<dyn std::error::Error>>{
 			.filter(soetb::OcoID.eq(inst_id))
 			.load::<OcorSoe>(&connec)?;
 
-		send_email(&destinos, build_message(instance,ocor_soe)?)?;
+		send_email(sender, &destinos, build_message(instance,ocor_soe)?)?;
 
 		diesel::update(ocortb::ocorrencia.find(inst_id))
 			.set(ocortb::EmailSended.eq("t")).execute(&connec)?;
 	}
 	Ok(())
 }
+
+
+
+
+
 
 #[cfg(test)]
 mod tests{
@@ -110,38 +114,38 @@ mod tests{
 	}
 
 	#[test]
-	fn build_table_from_query()->Result<(),Box<dyn std::error::Error>>{
+	fn build_table_from_query(){
 		use std::{fs,io::Write};
 
-		let db = DbConfig::init("CHAVES_DB_LOCAL")?;
+		let db = DbConfig::init("CHAVES_DB_LOCAL").unwrap();
 
 		let (url,table) = db.make_table_urls().next().unwrap();
-		let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
+		let connec = MysqlConnection::establish(&format!("{}{}",url,table)).unwrap();
 
 		let results = ocortb::ocorrencia
 			.filter(ocortb::EmailSended.eq("f"))
 			.limit(1)
-			.load::<Ocor>(&connec)?;
+			.load::<Ocor>(&connec).unwrap();
 
 		for inst in results{
 			let ocor_soe = soetb::ocorrencia_soe
 				.filter(soetb::OcoID.eq(inst.id))
-				.load::<OcorSoe>(&connec)?;
+				.load::<OcorSoe>(&connec).unwrap();
 			
-			let mut f = fs::File::create("./testres/tabela_from_query.html")?;
+			let mut f = fs::File::create("./testres/tabela_from_query.html").unwrap();
 
-			let html = build_message(inst, ocor_soe)?;
+			let html = build_message(inst, ocor_soe).unwrap();
 			assert!(f.write_all(html.as_bytes()).is_ok());
 		}
-		Ok(())
 	}
+	//TODO: consertar o test
 	//#[test]
 	#[allow(dead_code)]
 	fn is_send_email_test_base()->Result<(),Box<dyn std::error::Error>>{
 		use lettre::transport::smtp::authentication::Credentials;
 		use lettre::{Message, SmtpTransport, Transport };
 		
-		let (user,senha,_relay) = crate::config_info::get_email_sender();
+		let (user,senha,_relay) = (String::new(),String::new(),String::new());
 
 		let email = Message::builder()
 			.from(format!("Engenharia <{}>",&user).parse()?)

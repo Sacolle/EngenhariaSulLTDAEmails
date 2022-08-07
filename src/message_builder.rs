@@ -1,9 +1,9 @@
 
 use serde::Deserialize;
 use serde_json::from_str as JSONparse;
-use std::error::Error;
 
 use crate::models::{Ocor,OcorSoe};
+use crate::error::{MissignFieldError,TableProcessError};
 
 const HTMLHEAD: &str = r#"<!DOCTYPE html>
 <html lang="pt-BR">
@@ -131,13 +131,22 @@ fn chrono_def()->chrono::NaiveDateTime{
 	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
 }
 
-pub fn build_message(caso: Ocor,soe: Vec<OcorSoe>)->Result<String, Box<dyn Error>>{
+pub fn build_message(caso: Ocor,soe: Vec<OcorSoe>)->Result<String, TableProcessError>{
 	let mut result = String::from(HTMLHEAD);
 	let info = ExtraInfo::new(&caso);
 
-	let pre_ocor:CondPrePosTabela = JSONparse(caso.condpre.as_ref().unwrap())?;
-	let pos_ocor:CondPrePosTabela = JSONparse(caso.condpos.as_ref().unwrap())?;
-	let faltas:FaltasTabela = JSONparse(caso.faltas.as_ref().unwrap())?;
+	let pre_ocor:CondPrePosTabela = JSONparse(
+		caso.condpre.as_ref()
+		.ok_or(MissignFieldError::new("condPre"))?
+	)?;
+	let pos_ocor:CondPrePosTabela = JSONparse(
+		caso.condpos.as_ref()
+		.ok_or(MissignFieldError::new("condPós"))?
+	)?;
+	let faltas:FaltasTabela = JSONparse(
+		caso.faltas.as_ref()
+		.ok_or(MissignFieldError::new("tabelaFaltas"))?
+	)?;
 
 	result.push_str(&pre_ocor.to_html(&info));
 	result.push_str(&faltas.to_html(&info));

@@ -1,4 +1,4 @@
-/*pub mod models;
+/*pub mod models;relay
 pub mod schema;*/
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport,
@@ -7,29 +7,26 @@ use lettre::{Message, SmtpTransport, Transport,
 
 use lettre::message::Mailbox;
 use crate::models::Email;
+use crate::config_info::EmailSender;
+use crate::error::{MissignFieldError,TableProcessError};
 
 
-pub fn send_email(destinos:&Vec<Email>, html:String) -> Result<(), Box<dyn std::error::Error>>{
-	let (user,senha,relay) = crate::config_info::get_email_sender();
+pub fn send_email(sender:&EmailSender,destinos:&Vec<Email>, html:String) -> Result<(),TableProcessError>{
 
-	let email = Message::builder()
-		.from(format!("Engenharia <{}>",user).parse()?)
+	let mut email = Message::builder()
+		.from(format!("{} <{}>",&sender.nome,&sender.email).parse()?)
 		.subject("Testando o envio + html");
 
-	let email = destinos.iter()
-		.fold(email, |acc,mail|{
-			println!("{}",mail.email_adrs.clone().unwrap());
-			match &mail.email_adrs{
-				Some(val)=>acc.to(
-						Mailbox::new(
-							mail.email_name.clone(),
-							val.parse().unwrap())
-						),
-				None => acc
-			}
-		});
-	println!("The value of the email is:\n{:?}",email);
-
+	//Ao definir os tipos de errors, mudar a função para ok_or
+	for mbox in destinos{
+		email = email.to(Mailbox::new(
+			mbox.email_name.clone(),
+			mbox.email_adrs.as_ref()
+				.ok_or(MissignFieldError::new("email_adrs"))?
+				.parse()?)
+			);
+	}
+	//println!("The value of the email is:\n{:?}",email);
 	let email = email.multipart(
 			MultiPart::alternative() // This is composed of two parts.
 			.singlepart(
@@ -43,31 +40,26 @@ pub fn send_email(destinos:&Vec<Email>, html:String) -> Result<(), Box<dyn std::
 					.body(html),
 			),
 		)?;
-	
 
-	let creds = Credentials::new(user,senha);
+	let creds = Credentials::new(sender.email.clone(),sender.senha.clone());
 
 	// Open a remote connection to gmail
-	let mailer = SmtpTransport::starttls_relay(&relay)?
+	let mailer = SmtpTransport::starttls_relay("smtp.office365.com")?
 		.credentials(creds)
 		.build();
 
 	// Send the email
-	//retorna o enum result da função para main
-
-	match mailer.send(&email){
-		Ok(_) => Ok(()),
-		Err(e) => Err(Box::new(e))
-	}
+	mailer.send(&email)?;
+	Ok(())
 }
+
 
 #[cfg(test)]
 mod tests{
 	use super::*;
-	use std::error::Error;
 	//#[test]
 	#[allow(dead_code)]
-	fn testing_email_send_func()->Result<(),Box<dyn Error>>{
+	fn testing_email_send_func(){
 		let destinos = vec![
 			Email{
 				id: 0,
@@ -88,7 +80,6 @@ mod tests{
 				env_normaliz:None
 			}
 		];
-		send_email(&destinos, String::from("test"))?;
-		Ok(())
+		send_email(&EmailSender::get("GMAIL_CREDS").unwrap(),&destinos, String::from("test")).unwrap();
 	}
 }
