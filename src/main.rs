@@ -22,12 +22,11 @@ use schema::cadastroemails::dsl as emails;
 fn main(){
 	let db = DbConfig::init("CHAVES_DB_LOCAL").expect("Falha no .ini");
 	let email = EmailSender::get("GMAIL_CREDS").expect("Falha no .ini");
+
 	for (url,table) in db.make_table_urls(){
-		if let Err(e) = process_table(&url,&table,&email){
-			//TODO: log the errors
-			println!("Failure at table {}:\n{}",&table,e);
-		}else{
-			println!("Tabela no server: {}\nCom link:{}\nAcessada com sucesso",&url,&table);
+		match process_table(&url, &table, &email){
+			Ok(_) => println!("Tabela {} acessada com sucesso",&table),
+			Err(e) => println!("Failure at table {}:\n{}",&table,e) 
 		}
 	}
 }
