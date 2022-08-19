@@ -212,13 +212,15 @@ mod tests{
 			condpre: Some(String::from(r#"{"P":85.5,"Ia":62,"Ib":9.4,"Ic":22.3,"In":68.8}"#)),
 			condpos: Some(String::from(r#"{"P":12.8,"Ia":47.1,"Ib":24.2,"Ic":26.1,"In":0.2}"#)),
 			num_relig: None,
-			lockout:  None,
 			prot_atu: None,
 			id_cause: None,
 			email_sended: None,
 			sms_sended: None,
 			cause: None,
 			observacao: None,
+			tipo_oco:None,
+			prot_sen: None,
+			modified_by:None
 		};
 
 		let soe = vec![

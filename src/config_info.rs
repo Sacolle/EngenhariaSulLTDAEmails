@@ -6,7 +6,8 @@ use crate::error::MissignFieldError;
 
 pub struct DbConfig{
 	pub url: String,
-	pub db: String
+	pub db: String,
+	pub email_db: String
 }
 
 impl DbConfig {
@@ -15,6 +16,7 @@ impl DbConfig {
 		config.load("config.ini")?;
 
 		let db = config.get(section,"DB").unwrap();
+		let email_db = config.get(section,"EMAILDB").unwrap();
 		
 		let url = format!("mysql://{}:{}@{}/",
 			config.get(section, "USER").unwrap(),
@@ -22,7 +24,7 @@ impl DbConfig {
 			config.get(section, "URL").unwrap(),
 		);		
 
-		Ok(DbConfig { url, db })
+		Ok(DbConfig { url, db, email_db })
 	}
 	pub fn make_table_urls<'a>(&'a self)-> impl Iterator<Item = (String,String)> + 'a {
 		self.db

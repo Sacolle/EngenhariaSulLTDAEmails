@@ -1,5 +1,13 @@
+/* 
+* Bom, as tabelas da empresa são capitalizadas (má prática).
+* o ORM que estou usando trabalha como se a DB fosse em linux,
+* o que tem o nome das tabelas só em minusculo.
+* Então é esse negocio meio hack ae mesmo pq é
+*/
+
 table! {
-    cadastroemails (EmailId) {
+	#[allow(non_snake_case)]
+    CadastroEmails (EmailId) {
         EmailId -> Integer,
         Empresa -> Nullable<Char>,
         EmailAddr -> Nullable<Char>,
@@ -11,30 +19,35 @@ table! {
 }
 
 table! {
-    ocorrencia (OcoID) {
+	#[allow(non_snake_case)]
+    Ocorrencia (OcoID) {
         OcoID -> Integer,
         SE -> Nullable<Char>,
         AL -> Nullable<Char>,
         EQP -> Nullable<Char>,
         DtHrIni -> Timestamp,
         DtHrFim -> Timestamp,
+        NRelig -> Nullable<Integer>,
         Duracao -> Nullable<Float>,
+		TipoOco -> Nullable<Char>,
+        ProtSen -> Nullable<Char>,
+        ProtAtu -> Nullable<Char>,
         Faltas -> Nullable<Longtext>,
         CondPre -> Nullable<Longtext>,
         CondPos -> Nullable<Longtext>,
-        NRelig -> Nullable<Integer>,
-        Lockout -> Nullable<Char>,
-        ProtAtu -> Nullable<Char>,
-        IdCausa -> Nullable<Integer>,
+        ///Lockout -> Nullable<Char>,
         EmailSended -> Nullable<Char>,
         SMSSended -> Nullable<Char>,
+        IdCausa -> Nullable<Integer>,
+		ModifBy -> Nullable<Char>,
         Causa -> Nullable<Varchar>,
         Obs -> Nullable<Varchar>,
     }
 }
 
 table! {
-    ocorrencia_soe (SoeID) {
+	#[allow(non_snake_case)]
+    Ocorrencia_SOE (SoeID) {
         SoeID -> Integer,
         OcoID -> Nullable<Integer>,
         E3TimeStamp -> Nullable<Timestamp>,
@@ -46,7 +59,7 @@ table! {
 }
 
 allow_tables_to_appear_in_same_query!(
-    cadastroemails,
-    ocorrencia,
-    ocorrencia_soe,
+    CadastroEmails,
+    Ocorrencia,
+    Ocorrencia_SOE,
 );

@@ -14,57 +14,73 @@ use diesel::prelude::*;
 use message_builder::build_message;
 use utilities::send_email;
 use error::{TableProcessError,MissignFieldError};
-use schema::ocorrencia::dsl as ocortb;
-use schema::ocorrencia_soe::dsl as soetb;
-use schema::cadastroemails::dsl as emails;
+use schema::Ocorrencia::dsl as ocortb;
+use schema::Ocorrencia_SOE::dsl as soetb;
+use schema::CadastroEmails::dsl as emails;
 
+//temp para evitar envio de email em prod
+use std::env;
+use std::{fs,io::Write};
 
+/*TODO: 
+	* acessar corretamente o a table EnvioEmais
+*/
 fn main(){
-	let db = DbConfig::init("CHAVES_DB_LOCAL").expect("Falha no .ini");
+	let db = DbConfig::init("CHAVES_DB_MARIA").expect("Falha no .ini");
 	let email = EmailSender::get("GMAIL_CREDS").expect("Falha no .ini");
+	let email_table_conection = MysqlConnection::establish(
+		&format!("{}{}",&db.url,&db.email_db))
+		.expect("Falha em conectar a table emails");
 
 	for (url,table) in db.make_table_urls(){
-		match process_table(&url, &table, &email){
+		match process_table(&url, &table, &email,&email_table_conection){
 			Ok(_) => println!("Tabela {} acessada com sucesso",&table),
 			Err(e) => println!("Failure at table {}:\n{}",&table,e) 
 		}
 	}
 }
 
-fn process_table(url:&str,table:&str,sender:&EmailSender)->Result<(),TableProcessError>{
+fn process_table(url:&str,table:&str,sender:&EmailSender,email_db:&MysqlConnection)->Result<(),TableProcessError>{
 	let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
 
-	let results = ocortb::ocorrencia
-		.filter(ocortb::EmailSended.eq("f"))
+	let results = ocortb::Ocorrencia
+		.filter(ocortb::EmailSended.eq("N"))
 		.limit(10)
 		.load::<Ocor>(&connec)?;
-
+	assert!(results.len()>0);
 	let empresa_emails = table.split('_').nth(1)
 		.ok_or(MissignFieldError::new("Nome da Db é malformado"))?;
 
-	let destinos = emails::cadastroemails
+	let destinos = emails::CadastroEmails
 		.filter(emails::Empresa.eq(empresa_emails))
-		.load::<Email>(&connec)?;
+		.load::<Email>(email_db)?;
 	
 	for instance in results{
 		let inst_id = instance.id;
 
-		let ocor_soe = soetb::ocorrencia_soe
+		let ocor_soe = soetb::Ocorrencia_SOE
 			.filter(soetb::OcoID.eq(inst_id))
 			.load::<OcorSoe>(&connec)?;
 
-		send_email(sender, &destinos, build_message(instance,ocor_soe)?)?;
+		let email_body = build_message(instance,ocor_soe)?;
 
-		diesel::update(ocortb::ocorrencia.find(inst_id))
-			.set(ocortb::EmailSended.eq("t")).execute(&connec)?;
+		if env::var("SEND").is_ok(){
+			println!("Sending...");
+			/*
+			send_email(sender, &destinos, email_body)?;
+			diesel::update(ocortb::Ocorrencia.find(inst_id))
+				.set(ocortb::EmailSended.eq("S")).execute(&connec)?;
+			*/
+		}else{
+			let filename = format!("./testres/{}{}.html",empresa_emails,inst_id);
+			println!("Generating results at: {}",&filename);
+			let mut f = fs::File::create(filename).unwrap();
+
+			assert!(f.write_all(email_body.as_bytes()).is_ok());
+		}
 	}
 	Ok(())
 }
-
-
-
-
-
 
 #[cfg(test)]
 mod tests{
@@ -86,7 +102,7 @@ mod tests{
 		let (url,table) = db.make_table_urls().next().unwrap();
 		let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
 
-		let results = ocortb::ocorrencia
+		let results = ocortb::Ocorrencia
 			.filter(ocortb::EmailSended.eq("f"))
 			.load::<Ocor>(&connec)?;
 
@@ -103,7 +119,7 @@ mod tests{
 		let empresa_emails = table.split('_').nth(1).unwrap();
 		println!("pegando emails da empresa: {}",empresa_emails);
 
-		let destinos = emails::cadastroemails
+		let destinos = emails::CadastroEmails
 			.filter(emails::Empresa.eq(empresa_emails))
 			.load::<Email>(&connec)?;
 
@@ -121,13 +137,13 @@ mod tests{
 		let (url,table) = db.make_table_urls().next().unwrap();
 		let connec = MysqlConnection::establish(&format!("{}{}",url,table)).unwrap();
 
-		let results = ocortb::ocorrencia
+		let results = ocortb::Ocorrencia
 			.filter(ocortb::EmailSended.eq("f"))
 			.limit(1)
 			.load::<Ocor>(&connec).unwrap();
 
 		for inst in results{
-			let ocor_soe = soetb::ocorrencia_soe
+			let ocor_soe = soetb::Ocorrencia_SOE
 				.filter(soetb::OcoID.eq(inst.id))
 				.load::<OcorSoe>(&connec).unwrap();
 			
