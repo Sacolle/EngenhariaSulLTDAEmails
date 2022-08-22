@@ -9,11 +9,11 @@ mod models;
 extern crate diesel;
 
 use models::{Ocor,OcorSoe, Email};
-use config_info::{DbConfig,EmailSender};
+use config_info::{EmailSender};
 use diesel::prelude::*;
 use message_builder::build_message;
 use utilities::send_email;
-use error::{TableProcessError,MissignFieldError};
+use error::{TableProcessError};
 use schema::Ocorrencia::dsl as ocortb;
 use schema::Ocorrencia_SOE::dsl as soetb;
 use schema::CadastroEmails::dsl as emails;
@@ -22,37 +22,61 @@ use schema::CadastroEmails::dsl as emails;
 use std::env;
 use std::{fs,io::Write};
 
-/*TODO: 
-	* acessar corretamente o a table EnvioEmais
-*/
-fn main(){
-	let db = DbConfig::init("CHAVES_DB_MARIA").expect("Falha no .ini");
-	let email = EmailSender::get("GMAIL_CREDS").expect("Falha no .ini");
-	let email_table_conection = MysqlConnection::establish(
-		&format!("{}{}",&db.url,&db.email_db))
-		.expect("Falha em conectar a table emails");
 
-	for (url,table) in db.make_table_urls(){
-		match process_table(&url, &table, &email,&email_table_conection){
-			Ok(_) => println!("Tabela {} acessada com sucesso",&table),
-			Err(e) => println!("Failure at table {}:\n{}",&table,e) 
-		}
-	}
+fn main(){
+	let today = chrono::Utc::today();
+	let mut log_file = fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(format!("{}_erros",today))
+        .expect("Erro em gerar arquivo, terminação completa sem execução.");
+
+	if let Err(err) = laco_de_operacao(&mut log_file){
+		log_error(&mut log_file, err.to_string())	
+	};
 }
 
-fn process_table(url:&str,table:&str,sender:&EmailSender,email_db:&MysqlConnection)->Result<(),TableProcessError>{
-	let connec = MysqlConnection::establish(&format!("{}{}",url,table))?;
+fn log_error(file:&mut fs::File,error:String){
+	let now = chrono::Utc::now();	
+	let error_msg = format!("{}: {}",now,error);
+
+	assert!(file.write_all(error_msg.as_bytes()).is_ok());
+}
+
+fn laco_de_operacao(file:&mut fs::File)->Result<(),TableProcessError>{
+	let (db,email) = config_info::load_config("config.ini")?;
+
+	let email_table_conection = MysqlConnection::establish(&format!("{}{}",&db.url,&db.email_db))?;
+
+	let empresas = emails::CadastroEmails
+		.select(emails::Empresa)
+		.distinct()
+		.load::<Option<String>>(&email_table_conection)?;
+
+	for empresa in empresas.into_iter().filter(|emp|emp.is_some()){
+		let emp = empresa.unwrap();
+		match process_table(&db.url, &emp, &email,&email_table_conection){
+			Ok(_) => println!("Tabela {} acessada com sucesso",&emp),
+			Err(e) => {
+				println!("Failure at table {}:\n{}",&emp,e);
+				log_error(file, format!("Falha da base da empresa {}:{}",&emp,e));
+			} 
+		}
+	}
+	Ok(())
+}
+
+fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&MysqlConnection)->Result<(),TableProcessError>{
+	let connec = MysqlConnection::establish(&format!("{}SGO_{}",url,empresa))?;
 
 	let results = ocortb::Ocorrencia
 		.filter(ocortb::EmailSended.eq("N"))
 		.limit(10)
 		.load::<Ocor>(&connec)?;
-	assert!(results.len()>0);
-	let empresa_emails = table.split('_').nth(1)
-		.ok_or(MissignFieldError::new("Nome da Db é malformado"))?;
 
 	let destinos = emails::CadastroEmails
-		.filter(emails::Empresa.eq(empresa_emails))
+		.filter(emails::Empresa.eq(empresa))
 		.load::<Email>(email_db)?;
 	
 	for instance in results{
@@ -62,17 +86,16 @@ fn process_table(url:&str,table:&str,sender:&EmailSender,email_db:&MysqlConnecti
 			.filter(soetb::OcoID.eq(inst_id))
 			.load::<OcorSoe>(&connec)?;
 
-		let email_body = build_message(instance,ocor_soe)?;
+		//retornar o título junto
+		let (title, email_body) = build_message(empresa,instance,ocor_soe)?;
 
 		if env::var("SEND").is_ok(){
 			println!("Sending...");
-			/*
-			send_email(sender, &destinos, email_body)?;
+			send_email(sender, &destinos, title,email_body)?;
 			diesel::update(ocortb::Ocorrencia.find(inst_id))
 				.set(ocortb::EmailSended.eq("S")).execute(&connec)?;
-			*/
 		}else{
-			let filename = format!("./testres/{}{}.html",empresa_emails,inst_id);
+			let filename = format!("./testres/{}{}.html",empresa,inst_id);
 			println!("Generating results at: {}",&filename);
 			let mut f = fs::File::create(filename).unwrap();
 
@@ -81,7 +104,7 @@ fn process_table(url:&str,table:&str,sender:&EmailSender,email_db:&MysqlConnecti
 	}
 	Ok(())
 }
-
+/*
 #[cfg(test)]
 mod tests{
 	use super::*;
@@ -183,4 +206,4 @@ mod tests{
 		}	
 		Ok(())
 	}
-}
+} */

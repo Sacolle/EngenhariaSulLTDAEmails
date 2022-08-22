@@ -8,7 +8,8 @@ pub enum TableProcessError{
 	EmailSendError(lettre::transport::smtp::Error),
 	EmailParseError(lettre::address::AddressError),
 	SqlQueryError(diesel::result::Error),
-	SqlConnectionError(diesel::ConnectionError)
+	SqlConnectionError(diesel::ConnectionError),
+	LoadIniError(String)
 }
 impl fmt::Display for TableProcessError{
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -20,6 +21,7 @@ impl fmt::Display for TableProcessError{
 			Self::EmailParseError(e) => write!(f,"Email Adress is malformed:\n\t{}",e),
 			Self::SqlQueryError(e) => write!(f,"SQL query failed:\n\t{}",e),
 			Self::SqlConnectionError(e) => write!(f,"Failed to connect to DB:\n\t{}",e),
+			Self::LoadIniError(e)=> write!(f,"Falha em carregar o arquivo Ini:\n\t{}",e),
 		}
 	}
 }
@@ -79,5 +81,11 @@ impl From<diesel::result::Error> for TableProcessError{
 impl From<diesel::ConnectionError> for TableProcessError{
 	fn from(e: diesel::ConnectionError) -> Self {
 		TableProcessError::SqlConnectionError(e)
+	}
+}
+
+impl From<String> for TableProcessError{
+	fn from(e: String) -> Self {
+		TableProcessError::LoadIniError(e)
 	}
 }

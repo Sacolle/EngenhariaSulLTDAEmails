@@ -11,11 +11,10 @@ use crate::config_info::EmailSender;
 use crate::error::{MissignFieldError,TableProcessError};
 
 
-pub fn send_email(sender:&EmailSender,destinos:&Vec<Email>, html:String) -> Result<(),TableProcessError>{
-
+pub fn send_email(sender:&EmailSender,destinos:&Vec<Email>, title:String,html:String) -> Result<(),TableProcessError>{
 	let mut email = Message::builder()
 		.from(format!("{} <{}>",&sender.nome,&sender.email).parse()?)
-		.subject("Testando o envio + html");
+		.subject(title);
 
 	//Ao definir os tipos de errors, mudar a função para ok_or
 	for mbox in destinos{
@@ -54,6 +53,7 @@ pub fn send_email(sender:&EmailSender,destinos:&Vec<Email>, html:String) -> Resu
 }
 
 
+/*
 #[cfg(test)]
 mod tests{
 	use super::*;
@@ -82,4 +82,4 @@ mod tests{
 		];
 		send_email(&EmailSender::get("GMAIL_CREDS").unwrap(),&destinos, String::from("test")).unwrap();
 	}
-}
+} */

@@ -1,37 +1,58 @@
 use configparser::ini::Ini;
-use std::error::Error;
+use std::collections::HashMap;
 
 
-use crate::error::MissignFieldError;
+use crate::error::{MissignFieldError,TableProcessError};
+
+
+type Map = HashMap<String,HashMap<String,Option<String>>>;
+
+
+pub fn load_config(file:&str)->Result<(DbConfig,EmailSender),TableProcessError>{
+	let config = Ini::new().load(file)?;
+	let db_config = DbConfig::init(&config)?;
+	let email_sender = EmailSender::init(&config)?;
+
+	Ok((db_config,email_sender))
+}
 
 pub struct DbConfig{
 	pub url: String,
-	pub db: String,
 	pub email_db: String
 }
 
 impl DbConfig {
-	pub fn init(section:&str) -> Result<DbConfig,Box<dyn Error>>{
-		let mut config = Ini::new();
-		config.load("config.ini")?;
+	pub fn init(map:&Map) -> Result<DbConfig,MissignFieldError>{
+		let section = map.get("CHAVES_DB_MARIA")
+			.ok_or(MissignFieldError::new("CHAVES_DB_MARIA"))?;
 
-		let db = config.get(section,"DB").unwrap();
-		let email_db = config.get(section,"EMAILDB").unwrap();
+		let email_db = section.get("EMAILDB")
+			.ok_or(MissignFieldError::new("nome"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of nome"))?
+			.clone();
 		
-		let url = format!("mysql://{}:{}@{}/",
-			config.get(section, "USER").unwrap(),
-			config.get(section, "SENHA").unwrap(),
-			config.get(section, "URL").unwrap(),
-		);		
+		let user = section.get("USER")
+			.ok_or(MissignFieldError::new("user"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of user"))?
+			.clone();
 
-		Ok(DbConfig { url, db, email_db })
-	}
-	pub fn make_table_urls<'a>(&'a self)-> impl Iterator<Item = (String,String)> + 'a {
-		self.db
-			.split(',')
-			.map(|e|
-				(self.url.clone(), e.trim().to_string())
-			)
+		let senha = section.get("SENHA")
+			.ok_or(MissignFieldError::new("senha"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of senha"))?
+			.clone();
+
+		let url_parcial = section.get("URL")
+			.ok_or(MissignFieldError::new("url"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of url"))?
+			.clone();
+
+		let url = format!("mysql://{}:{}@{}/",user,senha,url_parcial);		
+
+		Ok(DbConfig { url, email_db })
 	}
 }
 
@@ -42,29 +63,34 @@ pub struct EmailSender{
 }
 
 impl EmailSender{
-	pub fn get(section:&str)->Result<Self,Box<dyn Error>>{
-		let mut config = Ini::new();
-		config.load("config.ini")?;
+	pub fn init(map:&Map)->Result<Self,MissignFieldError>{
+		let section = map.get("EMAIL_CREDS")
+			.ok_or(MissignFieldError::new("EMAIL_CREDS"))?;
 
-		let nome= config.get(section,"nome")
-			.ok_or(MissignFieldError::new("nome"))?;
-		let email = config.get(section,"email")
-			.ok_or(MissignFieldError::new("email"))?;
-		let senha = config.get(section,"senha")
-			.ok_or(MissignFieldError::new("senha"))?;
+		let nome= section.get("nome")
+			.ok_or(MissignFieldError::new("nome"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of nome"))?
+			.clone();
+
+		let email = section.get("email")
+			.ok_or(MissignFieldError::new("email"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of email"))?
+			.clone();
+
+		let senha = section.get("senha")
+			.ok_or(MissignFieldError::new("senha"))?
+			.as_ref()
+			.ok_or(MissignFieldError::new("val of senha"))?
+			.clone();
 
 		Ok(EmailSender { nome ,email, senha })
 	}
 }
-
 #[cfg(test)]
 mod tests{
     use super::*;
-	#[test]
-	fn valid_base_url(){
-		let db = DbConfig::init("TEST_SECTION").unwrap();
-		assert_eq!("mysql://user:senha@google.com/",&db.url);
-	}
 	#[test]
 	fn valid_ini_file(){
 		let mut config = Ini::new();
@@ -79,14 +105,4 @@ mod tests{
 			}
 		}
 	}
-	#[test]
-	fn valid_iterator(){
-		let db = DbConfig::init("CHAVES_DB_LOCAL").unwrap();
-		let test_vec = vec!["test_db"];
-		
-		for url in db.make_table_urls().zip(test_vec){
-			assert_eq!((url.0).1,url.1.to_owned());
-		}
-	}
-
 }
