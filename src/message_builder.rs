@@ -123,7 +123,6 @@ impl OcorrenciaSoe{
 	}
 }
 
-
 pub fn build_message(empresa:&str,caso: Ocor,soe: Vec<OcorSoe>)->Result<(String,String),TableProcessError>{
 	let text_info = TextInfo::build_from(&caso);
 	let table_info = TableInfo::build_from(&caso,soe)?;
@@ -172,7 +171,7 @@ fn build_head(txt:TextInfo,empresa:&str)->String{
 			Equipamento: {}
 		</p>
 		<p style="white-space:pre;">Inicio: {}      Termino: {}</p>
-		<p>Duração: {}</p>"#,
+		<p>Duração: {}s</p>"#,
 		empresa,txt.subestacao,txt.modulo,txt.equipamento,txt.inicio,txt.termino,txt.duracao);
 }
 
@@ -250,15 +249,19 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	return format!("{}{}{}{}",pre_ocor,faltas,eventos,pos_ocor)
 }
 
+fn chrono_def()->chrono::NaiveDateTime{
+	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
+}
+
 #[derive(Deserialize,Debug)]
 struct FaltasTabela{
-	#[serde(alias = "IFa")]
+	#[serde(alias = "IaF")]
 	fase_a: f32,
-	#[serde(alias = "IFb")]
+	#[serde(alias = "IbF")]
 	fase_b: f32,
-	#[serde(alias = "IFc")]
+	#[serde(alias = "IcF")]
 	fase_c: f32,
-	#[serde(alias = "IFn")]
+	#[serde(alias = "InF")]
 	fase_n: f32,
 }
 
@@ -276,96 +279,6 @@ struct CondPrePosTabela{
 	fase_n: f32,
 }
 
-fn chrono_def()->chrono::NaiveDateTime{
-	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
-}
-
-/*
-trait HTMLTable{
-	fn to_html(&self, info:&ExtraInfo)->String;
-}
-
-impl HTMLTable for FaltasTabela{
-	fn to_html(&self, info:&ExtraInfo)->String {
-		let mut tabela = String::from("<tr><th colspan = 4>CORRENTES DE FALTA</th></tr>\n");
-		tabela.push_str(HEADROW);
-
-		tabela.push_str(&make_row(info, &format!("Corrente de falta Fase A = {}",self.fase_a)));
-		tabela.push_str(&make_row(info, &format!("Corrente de falta Fase B = {}",self.fase_b)));
-		tabela.push_str(&make_row(info, &format!("Corrente de falta Fase C = {}",self.fase_c)));
-		tabela.push_str(&make_row(info, &format!("Corrente de falta Neutro = {}",self.fase_n)));
-		tabela
-	}
-}
-
-impl HTMLTable for CondPrePosTabela{
-	fn to_html(&self, info: &ExtraInfo)->String {
-		let mut tabela = String::from("<tr><th colspan = 4>CONDIÇÃO OPERAÇÃO PRÉ-OCORRÊNCIA</th></tr>\n");
-		tabela.push_str(HEADROW);
-
-		tabela.push_str(&make_row(info, &format!("Potência Ativa = {}",self.potencia_ativa)));
-		tabela.push_str(&make_row(info, &format!("Corrente na Fase A = {}",self.fase_a)));
-		tabela.push_str(&make_row(info, &format!("Corrente na Fase B = {}",self.fase_b)));
-		tabela.push_str(&make_row(info, &format!("Corrente na Fase C = {}",self.fase_c)));
-		tabela.push_str(&make_row(info, &format!("Corrente no Neutro = {}",self.fase_n)));
-		tabela
-	}
-}
-
-struct ExtraInfo<'a>( &'a chrono::NaiveDateTime, &'a chrono::NaiveDateTime);
-
-impl<'a> ExtraInfo<'a>{
-	fn new(ocor: &'a Ocor)->Self{
-		ExtraInfo ( &ocor.hora_ini,  &ocor.hora_fim)
-	} 
-}
-
-pub fn parse_soe(soe:Vec<OcorSoe>)->String{
-	let mut tabela = String::from("<tr><th colspan = 4>EVENTOS</th></tr>\n");
-	tabela.push_str(HEADROW);
-
-	for val in soe{
-		tabela.push_str(&format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
-			val.hora_ini.unwrap_or(chrono_def()),
-			val.mensagem.as_ref().unwrap_or(&String::new()),
-			val.hora_fim.unwrap_or(chrono_def()),
-			val.actor_id.as_ref().unwrap_or(&String::new()),
-		));
-	}
-	tabela
-}
-
-fn make_row(info:&ExtraInfo,line: &str)->String{ 
-	format!("<tr><td>{}</td><td>{}</td><td>{}</td><td></td></tr>\n",info.0, line, info.1)
-}
-
-pub fn build_message(caso: Ocor,soe: Vec<OcorSoe>)->Result<String, TableProcessError>{
-	let mut result = String::from(HTMLHEAD);
-	let info = ExtraInfo::new(&caso);
-
-	let pre_ocor:CondPrePosTabela = JSONparse(
-		caso.condpre.as_ref()
-		.ok_or(MissignFieldError::new("condPre"))?
-	)?;
-	let pos_ocor:CondPrePosTabela = JSONparse(
-		caso.condpos.as_ref()
-		.ok_or(MissignFieldError::new("condPós"))?
-	)?;
-	let faltas:FaltasTabela = JSONparse(
-		caso.faltas.as_ref()
-		.ok_or(MissignFieldError::new("tabelaFaltas"))?
-	)?;
-
-	result.push_str(&pre_ocor.to_html(&info));
-	result.push_str(&faltas.to_html(&info));
-	result.push_str(&parse_soe(soe));
-	result.push_str(&pos_ocor.to_html(&info));
-	
-	result.push_str(HTMLTAIL);
-
-	return Ok(result);
-}
- */
 
 #[cfg(test)]
 mod tests{
@@ -374,7 +287,7 @@ mod tests{
 
 	#[test]
 	fn proper_json_faltas(){
-		let faltas = Some(String::from(r#"{"IFa":1.5,"IFb":1.5,"IFc":1.5,"IFn":1.5}"#));
+		let faltas = Some(String::from(r#"{"IaF":1.5,"IbF":1.5,"IcF":1.5,"InF":1.5}"#));
 		let pre_ocor:Result<FaltasTabela, serde_json::Error> = JSONparse(faltas.as_ref().unwrap());
 		
 		match pre_ocor{
@@ -417,7 +330,7 @@ mod tests{
 			hora_ini: chrono_def(),
 			hora_fim: chrono_def(),
 			duracao: None,
-			faltas: Some(String::from(r#"{"IFa":96.5,"IFb":8.9,"IFc":94.2,"IFn":68.5}"#)),
+			faltas: Some(String::from(r#"{"IaF":96.5,"IbF":8.9,"IcF":94.2,"InF":68.5}"#)),
 			condpre: Some(String::from(r#"{"P":85.5,"Ia":62,"Ib":9.4,"Ic":22.3,"In":68.8}"#)),
 			condpos: Some(String::from(r#"{"P":12.8,"Ia":47.1,"Ib":24.2,"Ic":26.1,"In":0.2}"#)),
 			num_relig: None,
@@ -453,7 +366,7 @@ mod tests{
 			},
 		];
 
-		let (_titulo,html) = build_message("ding",caso, soe).unwrap();
+		let (_titulo,html) = build_message("EMPRESA TESTE",caso, soe).unwrap();
 		assert!(f.write_all(html.as_bytes()).is_ok());
 	}
 }

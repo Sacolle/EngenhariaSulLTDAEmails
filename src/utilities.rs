@@ -53,10 +53,10 @@ pub fn send_email(sender:&EmailSender,destinos:&Vec<Email>, title:String,html:St
 }
 
 
-/*
 #[cfg(test)]
 mod tests{
 	use super::*;
+	use crate::config_info;
 	//#[test]
 	#[allow(dead_code)]
 	fn testing_email_send_func(){
@@ -80,6 +80,8 @@ mod tests{
 				env_normaliz:None
 			}
 		];
-		send_email(&EmailSender::get("GMAIL_CREDS").unwrap(),&destinos, String::from("test")).unwrap();
+		let (_,email_creds) = config_info::load_config("config.ini").unwrap();
+
+		assert!(send_email(&email_creds,&destinos,String::from("Titulo"),String::from("Corpo")).is_ok());
 	}
-} */
+}
