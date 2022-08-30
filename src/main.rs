@@ -8,6 +8,7 @@ mod models;
 #[macro_use]
 extern crate diesel;
 
+use chrono::Datelike;
 use models::{Ocor,OcorSoe, Email};
 use config_info::{EmailSender};
 use diesel::prelude::*;
@@ -22,12 +23,12 @@ use schema::CadastroEmails::dsl as emails;
 use std::{fs,io::Write};
 
 fn main(){
-	let today = chrono::Utc::today();
+	let day = chrono::Utc::today();
 	let mut log_file = fs::OpenOptions::new()
         .write(true)
         .append(true)
         .create(true)
-        .open(format!("{}_erros",today))
+        .open(format!("{}-{}_err.txt",day.year(),day.month()))
         .expect("Erro em gerar arquivo, terminação completa sem execução.");
 
 	if let Err(err) = laco_de_operacao(&mut log_file){
@@ -37,7 +38,7 @@ fn main(){
 
 fn log_error(file:&mut fs::File,error:String){
 	let now = chrono::Utc::now();	
-	let error_msg = format!("{}: {}",now,error);
+	let error_msg = format!("{}: {}\n",now,error);
 
 	assert!(file.write_all(error_msg.as_bytes()).is_ok());
 }
@@ -70,7 +71,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&MysqlConnec
 
 	let results = ocortb::Ocorrencia
 		.filter(ocortb::EmailSended.eq("S"))
-		.limit(10)
+		.limit(1)
 		.load::<Ocor>(&connec)?;
 	
 	if results.is_empty(){

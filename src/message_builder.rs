@@ -25,11 +25,9 @@ const HTMLHEAD: &str = r#"
 		</style>
 	</head>
 	<body>
-		<table style="width: 50%;">
 	"#;
 
 const HTMLTAIL: &str = r#"
-			</table>
 		</body>
 	</html>
 	"#;
@@ -127,7 +125,7 @@ pub fn build_message(empresa:&str,caso: Ocor,soe: Vec<OcorSoe>)->Result<(String,
 	let text_info = TextInfo::build_from(&caso);
 	let table_info = TableInfo::build_from(&caso,soe)?;
 
-	let title = build_title(&caso,empresa)?;
+	let title = build_title(&caso)?;
 
 	let message_body = format!("{}{}{}{}",
 		HTMLHEAD,
@@ -139,7 +137,7 @@ pub fn build_message(empresa:&str,caso: Ocor,soe: Vec<OcorSoe>)->Result<(String,
 	Ok((title,message_body))
 }
 
-fn build_title(caso:&Ocor,empresa:&str)->Result<String,TableProcessError>{
+fn build_title(caso:&Ocor)->Result<String,TableProcessError>{
 	let tipo = match caso.tipo_oco.as_ref()
 		.ok_or(MissignFieldError::new("Tipo de Ocorrencia"))?
 		.as_str(){
@@ -156,8 +154,11 @@ fn build_title(caso:&Ocor,empresa:&str)->Result<String,TableProcessError>{
 	let modulo= caso.al.as_ref()
 		.ok_or(MissignFieldError::new("AL"))?;
 	
-	Ok(format!("{} - {} em {} Módulo:{}",
-		empresa, tipo, subestacao, modulo)
+	let equipamento = caso.eqp.as_ref()
+		.ok_or(MissignFieldError::new("EQP"))?;
+
+	Ok(format!("{}: {} {} {}",
+		tipo, subestacao, modulo, equipamento)
 	)
 }
 
@@ -171,8 +172,8 @@ fn build_head(txt:TextInfo,empresa:&str)->String{
 			Equipamento: {}
 		</p>
 		<p style="white-space:pre;">Inicio: {}      Termino: {}</p>
-		<p>Duração: {}s</p>"#,
-		empresa,txt.subestacao,txt.modulo,txt.equipamento,txt.inicio,txt.termino,txt.duracao);
+		<p>Duração: {}</p>"#,
+		empresa,txt.subestacao,txt.modulo,txt.equipamento,txt.inicio,txt.termino,hhmmss(txt.duracao));
 }
 
 fn build_table(info:TableInfo,caso:&Ocor)->String{
@@ -182,8 +183,7 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	let pre_ocor = format!(r#"
 		<tr>
 			<th colspan="4">CONDIÇÃO DE OPERAÇÃO DE PRE-OCORRÊNCIA</th>
-		</tr>
-		{}
+		</tr>{}
 		<tr><td>{}</td><td>Potência Ativa = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes na fase A = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes na fase B = {}</td><td>{}</td><td></td></tr>
@@ -200,8 +200,7 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	let pos_ocor = format!(r#"
 		<tr>
 			<th colspan="4">CONDIÇÃO DE OPERAÇÃO DE POS-OCORRÊNCIA</th>
-		</tr>
-		{}
+		</tr>{}
 		<tr><td>{}</td><td>Potência Ativa = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes na fase A = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes na fase B = {}</td><td>{}</td><td></td></tr>
@@ -218,8 +217,7 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	let faltas = format!(r#"
 		<tr>
 			<th colspan="4">CONDIÇÃO DE OPERAÇÃO DE POS-OCORRÊNCIA</th>
-		</tr>
-		{}
+		</tr>{}
 		<tr><td>{}</td><td>Correntes de Falta Fase A = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes de Falta Fase B = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes de Falta Fase C = {}</td><td>{}</td><td></td></tr>
@@ -240,17 +238,24 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	let eventos = format!(r#"
 		<tr>
 			<th colspan="4">EVENTOS</th>
-		</tr>
-		{}
+		</tr>{}
 		{}"#,
 		HEADROW,eventos_iner
 	);
 	
-	return format!("{}{}{}{}",pre_ocor,faltas,eventos,pos_ocor)
+	return format!("<table style=\"width: 1000px;\">\n{}{}{}{}\n</table>",pre_ocor,faltas,eventos,pos_ocor)
+			
 }
 
 fn chrono_def()->chrono::NaiveDateTime{
 	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
+}
+
+fn hhmmss(secs:f64)->String{
+	let min = secs as u32/ 60;
+	let hour = min/60;
+	let sec = secs%60.0;
+	format!("{:0wid$}:{:0wid$}:{:.4}",hour, min%60, sec, wid = 2)
 }
 
 #[derive(Deserialize,Debug)]
@@ -284,6 +289,13 @@ struct CondPrePosTabela{
 mod tests{
 	use super::*;
 	use std::{fs,io::Write};
+
+
+	#[test]
+	fn hour_convert(){
+		let secs = 3701.2f64;
+		assert_eq!(hhmmss(secs),String::from("01:01:41.2000"));
+	}
 
 	#[test]
 	fn proper_json_faltas(){
@@ -327,8 +339,10 @@ mod tests{
 			se: Some(String::from("SE")),
 			al: Some(String::from("AL")),
 			eqp: None,
+			hora_update: chrono_def(),
 			hora_ini: chrono_def(),
 			hora_fim: chrono_def(),
+			hora_evt_eqp: chrono_def(),
 			duracao: None,
 			faltas: Some(String::from(r#"{"IaF":96.5,"IbF":8.9,"IcF":94.2,"InF":68.5}"#)),
 			condpre: Some(String::from(r#"{"P":85.5,"Ia":62,"Ib":9.4,"Ic":22.3,"In":68.8}"#)),
