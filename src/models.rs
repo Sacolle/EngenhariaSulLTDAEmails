@@ -1,13 +1,15 @@
+use diesel::mysql::data_types::MysqlTime;
+
 #[derive(Queryable)]
 pub struct Ocor{
 	pub id: i32,
 	pub se: Option<String>,
 	pub al: Option<String>,
 	pub eqp: Option<String>,
-	pub hora_update: chrono::NaiveDateTime,
-	pub hora_ini: chrono::NaiveDateTime,
-	pub hora_fim: chrono::NaiveDateTime,
-	pub hora_evt_eqp: chrono::NaiveDateTime,
+	pub hora_update: MysqlTime,
+	pub hora_oco:    MysqlTime,
+	pub hora_ini:    MysqlTime,
+	pub hora_fim:    MysqlTime,
 	pub num_relig: Option<i32>,
 	pub duracao: Option<f32>,
 	pub tipo_oco: Option<String>,

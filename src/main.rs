@@ -46,16 +46,16 @@ fn log_error(file:&mut fs::File,error:String){
 fn laco_de_operacao(file:&mut fs::File)->Result<(),TableProcessError>{
 	let (db,email) = config_info::load_config("config.ini")?;
 
-	let email_table_conection = MysqlConnection::establish(&format!("{}{}",&db.url,&db.email_db))?;
+	let mut email_table_conection = MysqlConnection::establish(&format!("{}{}",&db.url,&db.email_db))?;
 
 	let empresas = emails::CadastroEmails
 		.select(emails::Empresa)
 		.distinct()
-		.load::<Option<String>>(&email_table_conection)?;
+		.load::<Option<String>>(&mut email_table_conection)?;
 
 	for empresa in empresas.into_iter().filter(|emp|emp.is_some()){
 		let emp = empresa.unwrap();
-		match process_table(&db.url, &emp, &email,&email_table_conection){
+		match process_table(&db.url, &emp, &email,&mut email_table_conection){
 			Ok(_) => println!("Tabela {} acessada com sucesso",&emp),
 			Err(e) => {
 				println!("Failure at table {}:\n{}",&emp,e);
@@ -66,13 +66,13 @@ fn laco_de_operacao(file:&mut fs::File)->Result<(),TableProcessError>{
 	Ok(())
 }
 
-fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&MysqlConnection)->Result<(),TableProcessError>{
-	let connec = MysqlConnection::establish(&format!("{}SGO_{}",url,empresa))?;
+fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlConnection)->Result<(),TableProcessError>{
+	let mut connec = MysqlConnection::establish(&format!("{}SGO_{}",url,empresa))?;
 
 	let results = ocortb::Ocorrencia
-		.filter(ocortb::EmailSended.eq("S"))
-		.limit(1)
-		.load::<Ocor>(&connec)?;
+		.filter(ocortb::EmailSended.eq("N"))
+		.limit(10)
+		.load::<Ocor>(&mut connec)?;
 	
 	if results.is_empty(){
 		println!("Nenhum resultado da tabela SGO_{}",empresa);
@@ -88,7 +88,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&MysqlConnec
 
 		let ocor_soe = soetb::Ocorrencia_SOE
 			.filter(soetb::OcoID.eq(inst_id))
-			.load::<OcorSoe>(&connec)?;
+			.load::<OcorSoe>(&mut connec)?;
 
 		//retornar o título junto
 		let (title, email_body) = build_message(empresa,instance,ocor_soe)?;
@@ -96,7 +96,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&MysqlConnec
 		send_email(sender, &destinos, title,email_body)?;
 		diesel::update(ocortb::Ocorrencia.find(inst_id))
 			.set(ocortb::EmailSended.eq("S"))
-			.execute(&connec)?;
+			.execute(&mut connec)?;
 	}
 	Ok(())
 }
@@ -116,12 +116,12 @@ use super::*;
 	fn query_empresas(){
 		let (db,_) = config_info::load_config("config.ini").unwrap();
 
-		let email_table_conection = MysqlConnection::establish(&format!("{}{}",db.url,db.email_db)).unwrap();
+		let mut email_table_conection = MysqlConnection::establish(&format!("{}{}",db.url,db.email_db)).unwrap();
 
 		let empresas = emails::CadastroEmails
 			.select(emails::Empresa)
 			.distinct()
-			.load::<Option<String>>(&email_table_conection).unwrap();
+			.load::<Option<String>>(&mut email_table_conection).unwrap();
 
 		//println!("{:?}",empresas.iter().map(|v|v.as_ref().unwrap().as_str()).collect::<Vec<&str>>());
 		let mut uniq = HashSet::new();
@@ -134,13 +134,13 @@ use super::*;
 		let url = db.url;
 		let empresa = String::from("CERIM");
 
-		let connec = MysqlConnection::establish(&format!("{}SGO_{}",&url,&empresa)).unwrap();
+		let mut connec = MysqlConnection::establish(&format!("{}SGO_{}",&url,&empresa)).unwrap();
 
 		let results = ocortb::Ocorrencia
 			.filter(ocortb::OcoID.eq(1))
 			.filter(ocortb::EmailSended.eq("S"))
 			.limit(10)
-			.load::<Ocor>(&connec).unwrap();
+			.load::<Ocor>(&mut connec).unwrap();
 		
 		let instance = results.into_iter().next();
 		assert!(instance.is_some());
@@ -149,7 +149,7 @@ use super::*;
 
 		let ocor_soe = soetb::Ocorrencia_SOE
 			.filter(soetb::OcoID.eq(inst_id))
-			.load::<OcorSoe>(&connec).unwrap();
+			.load::<OcorSoe>(&mut connec).unwrap();
 
 		//retornar o título junto
 		let (_ ,email_body) = build_message(&empresa,instance,ocor_soe).unwrap();

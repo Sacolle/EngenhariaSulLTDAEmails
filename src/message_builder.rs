@@ -1,6 +1,6 @@
-
 use serde::Deserialize;
 use serde_json::from_str as JSONparse;
+use diesel::mysql::data_types::MysqlTime;
 
 use crate::models::{Ocor,OcorSoe};
 use crate::error::{MissignFieldError,TableProcessError,};
@@ -45,8 +45,8 @@ struct TextInfo<'a>{
 	pub subestacao:&'a str,
 	pub modulo:&'a str,
 	pub equipamento:&'a str,
-	pub inicio:&'a chrono::NaiveDateTime,
-	pub termino:&'a chrono::NaiveDateTime,
+	pub inicio: chrono::NaiveDateTime,
+	pub termino:chrono::NaiveDateTime,
 	pub duracao:f64
 }
 
@@ -64,8 +64,8 @@ impl<'a> TextInfo<'a>{
 			.map(|val|val.as_str())
 			.unwrap_or("");
 
-		let inicio = &caso.hora_ini;
-		let termino = &caso.hora_fim;
+		let inicio =  parse_time(caso.hora_ini);
+		let termino = parse_time(caso.hora_fim);
 			
 		let duracao = caso.duracao.unwrap_or(0.0) as f64;
 
@@ -177,8 +177,8 @@ fn build_head(txt:TextInfo,empresa:&str)->String{
 }
 
 fn build_table(info:TableInfo,caso:&Ocor)->String{
-	let ini = caso.hora_ini;
-	let fim = caso.hora_fim;	
+	let ini = parse_time(caso.hora_ini);
+	let fim = parse_time(caso.hora_fim);	
 
 	let pre_ocor = format!(r#"
 		<tr>
@@ -246,6 +246,19 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	return format!("<table style=\"width: 1000px;\">\n{}{}{}{}\n</table>",pre_ocor,faltas,eventos,pos_ocor)
 			
 }
+
+fn parse_time(time: MysqlTime)->chrono::NaiveDateTime{
+	match time{
+		MysqlTime { year:0, month:0, day:0, hour:0,
+			minute:0, second:0, second_part:0,
+			.. }=>chrono_def(),
+		MysqlTime { year, month, day,
+			hour, minute, second,
+			.. }=> chrono::NaiveDate::from_ymd(year as i32,month,day)
+				.and_hms(hour,minute,second) 
+		}
+}
+
 
 fn chrono_def()->chrono::NaiveDateTime{
 	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
@@ -330,6 +343,14 @@ mod tests{
 		}
 	}
 
+	fn time_default()->MysqlTime{
+		use diesel::mysql::data_types::MysqlTimestampType;
+		MysqlTime::new(0, 0, 0,
+			0,0,0,0,
+			false, MysqlTimestampType::MYSQL_TIMESTAMP_DATETIME,0)
+	}
+
+
 	#[test]
 	fn proper_hmtl(){
 		let mut f = fs::File::create("./testres/tabela_para_envio.html").unwrap();
@@ -338,11 +359,11 @@ mod tests{
 			id: 1,
 			se: Some(String::from("SE")),
 			al: Some(String::from("AL")),
-			eqp: None,
-			hora_update: chrono_def(),
-			hora_ini: chrono_def(),
-			hora_fim: chrono_def(),
-			hora_evt_eqp: chrono_def(),
+			eqp: Some(String::from("EQP")),
+			hora_update: time_default(),
+			hora_oco:    time_default(),
+			hora_ini:    time_default(),
+			hora_fim:    time_default(),
 			duracao: None,
 			faltas: Some(String::from(r#"{"IaF":96.5,"IbF":8.9,"IcF":94.2,"InF":68.5}"#)),
 			condpre: Some(String::from(r#"{"P":85.5,"Ia":62,"Ib":9.4,"Ic":22.3,"In":68.8}"#)),
