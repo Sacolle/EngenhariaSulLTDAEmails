@@ -19,7 +19,6 @@ use diesel::prelude::*;
 use message_builder::build_message;
 use error::TableProcessError;
 
-//temp para evitar envio de email em prod
 use std::{fs,io::Write};
 
 fn main(){
@@ -134,10 +133,11 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 #[cfg(test)]
 mod tests{
 	use std::collections::HashSet;
-
-use super::*;
+	use super::*;
 	use crate::io::config_info;
+	use diesel::dsl::not;
 	#[test]
+
 	fn testing_connect(){
 		let (db,_) = config_info::load_config("config.ini").unwrap();
 
@@ -190,6 +190,7 @@ use super::*;
 				.and(ocortb::AL.eq(extra.modulo)
 				.and(ocortb::EQP.eq(extra.equipamento)))
 			)
+			.filter(not(ocortb::OcoID.eq(inst_id)))
 			.order_by(ocortb::DtHrOco.desc())
 			.limit(5)
 			.load::<Ocor>(&mut connec).unwrap();

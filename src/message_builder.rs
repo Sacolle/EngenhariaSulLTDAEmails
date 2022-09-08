@@ -1,3 +1,5 @@
+use chrono::Datelike;
+
 use crate::db::models::{Ocor,OcorSoe};
 use crate::error::TableProcessError;
 use crate::db::chunks::{TextInfo,TableInfo,PrevEqp,parse_time};
@@ -73,7 +75,7 @@ pub fn build_message(empresa:&str,caso: &Ocor,info: TextInfo ,soe: Vec<OcorSoe>,
 
 
 fn build_head(txt:TextInfo,empresa:&str)->String{
-	return format!(r#"
+	format!(r#"
 		<p>Prezado Sr(a)</p>
 		<p>Voce está recebendo esta mensagem devido a uma ocorrência no sistema elétrico da empresa {}.</p>
 		<p style="white-space: pre-line;">Subestação: {}
@@ -82,12 +84,13 @@ fn build_head(txt:TextInfo,empresa:&str)->String{
 		</p>
 		<p style="white-space:pre;">Inicio: {}      Termino: {}</p>
 		<p>Duração: {}</p>"#,
-		empresa,txt.subestacao,txt.modulo,txt.equipamento,txt.inicio,txt.termino,hhmmss(txt.duracao));
+		empresa,txt.subestacao,txt.modulo,txt.equipamento,
+		format_time(txt.inicio),format_time(txt.termino),hhmmss(txt.duracao))
 }
 
 fn build_table(info:TableInfo,caso:&Ocor)->String{
-	let ini = parse_time(caso.hora_ini);
-	let fim = parse_time(caso.hora_fim);	
+	let ini = format_time(parse_time(caso.hora_ini));
+	let fim = format_time(parse_time(caso.hora_fim));	
 
 	let pre_ocor = format!(r#"
 		<tr>
@@ -165,7 +168,7 @@ fn build_table_eqp(eqps:Vec<PrevEqp>)->String{
 			<td>{}</td>
 			<td>{}</td>
 			</tr>"#,
-			eqp.inicio,
+			format_time(eqp.inicio),
 			eqp.faltas.fase_a,
 			eqp.faltas.fase_b,
 			eqp.faltas.fase_c,
@@ -175,6 +178,11 @@ fn build_table_eqp(eqps:Vec<PrevEqp>)->String{
 			.collect::<Vec<String>>()
 			.join("\n"))
 }
+
+fn format_time(time:chrono::NaiveDateTime)->String{
+	format!("{:0>2}-{:0>2}-{} {}",time.day(),time.month(),time.year(),time.time())
+}
+
 
 fn hhmmss(secs:f64)->String{
 	let min = secs as u32/ 60;
