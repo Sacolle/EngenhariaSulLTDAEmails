@@ -35,6 +35,8 @@ pub struct OcorSoe{
 	pub hora_fim: Option<chrono::NaiveDateTime>,
 	pub complemento: Option<String>,
 	pub mensagem: Option<String>,
+	pub tipo: Option<String>,
+	pub alarme_norm: Option<String>,
 	pub actor_id: Option<String>
 }
 

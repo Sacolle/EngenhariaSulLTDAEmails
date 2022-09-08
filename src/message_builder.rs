@@ -1,9 +1,6 @@
-use serde::Deserialize;
-use serde_json::from_str as JSONparse;
-use diesel::mysql::data_types::MysqlTime;
-
-use crate::models::{Ocor,OcorSoe};
-use crate::error::{MissignFieldError,TableProcessError,};
+use crate::db::models::{Ocor,OcorSoe};
+use crate::error::TableProcessError;
+use crate::db::chunks::{TextInfo,TableInfo,PrevEqp,parse_time};
 
 const HTMLHEAD: &str = r#"
 <!DOCTYPE html>
@@ -41,125 +38,37 @@ const HEADROW: &str = r#"
 			</tr>
 "#;
 
-struct TextInfo<'a>{
-	pub subestacao:&'a str,
-	pub modulo:&'a str,
-	pub equipamento:&'a str,
-	pub inicio: chrono::NaiveDateTime,
-	pub termino:chrono::NaiveDateTime,
-	pub duracao:f64
-}
+const HEADROWEQP: &str = r#"
+			<tr class="titulos">
+			  <td>Hora do Evento</td>
+			  <td>Correntes de Falta</td>
+			  <td>Proto Sen</td>
+			  <td>Proto Atu</td>
+			</tr>
+"#;
 
-impl<'a> TextInfo<'a>{
-	fn build_from(caso:&'a Ocor)->Self{
-		let subestacao = caso.se.as_ref()
-			.map(|val|val.as_str())
-			.unwrap_or("");
 
-		let modulo= caso.al.as_ref()
-			.map(|val|val.as_str())
-			.unwrap_or("");
+pub fn build_message(empresa:&str,caso: &Ocor,info: TextInfo ,soe: Vec<OcorSoe>,eqp:Vec<Ocor>)->Result<(String,String),TableProcessError>{
+	let table_info = TableInfo::build_from(caso,soe)?;
+	let equipamentos:Vec<PrevEqp> = eqp.into_iter()
+		.filter_map(|val|PrevEqp::build_from(val).ok())
+		.collect();
 
-		let equipamento = caso.eqp.as_ref()
-			.map(|val|val.as_str())
-			.unwrap_or("");
+	let title = format!("{}: {} {} {}",
+		&info.tipo,
+		&info.subestacao,
+		&info.modulo,
+		&info.equipamento);
 
-		let inicio =  parse_time(caso.hora_ini);
-		let termino = parse_time(caso.hora_fim);
-			
-		let duracao = caso.duracao.unwrap_or(0.0) as f64;
-
-		TextInfo { subestacao, modulo, equipamento, inicio, termino, duracao}
-	}
-}
-
-struct TableInfo{
-	pub faltas: FaltasTabela,
-	pub cond_pre: CondPrePosTabela,
-	pub cond_pos: CondPrePosTabela,
-	pub eventos: Vec<OcorrenciaSoe>
-}
-
-impl TableInfo{
-	fn build_from(caso:&Ocor,soe:Vec<OcorSoe>)->Result<Self,TableProcessError>{
-		let cond_pre:CondPrePosTabela = JSONparse(
-			caso.condpre.as_ref()
-			.ok_or(MissignFieldError::new("condPre"))?
-		)?;
-		let cond_pos:CondPrePosTabela = JSONparse(
-			caso.condpos.as_ref()
-			.ok_or(MissignFieldError::new("condPós"))?
-		)?;
-		let faltas:FaltasTabela = JSONparse(
-			caso.faltas.as_ref()
-			.ok_or(MissignFieldError::new("tabelaFaltas"))?
-		)?;
-
-		let eventos = soe.into_iter()
-			.map(|val|OcorrenciaSoe::build_from(val))
-			.collect();
-
-		Ok(TableInfo{faltas,cond_pre,cond_pos,eventos})
-	}
-}
-
-struct OcorrenciaSoe{
-	pub hora_inicio:chrono::NaiveDateTime,
-	pub hora_fim:chrono::NaiveDateTime,
-	pub mensagem:String,
-	pub agente:String
-}
-
-impl OcorrenciaSoe{
-	fn build_from(soe:OcorSoe)->Self{
-		let hora_inicio= soe.hora_ini.unwrap_or(chrono_def());
-		let hora_fim = soe.hora_fim.unwrap_or(chrono_def());
-		let mensagem = soe.mensagem.unwrap_or(String::new());
-		let agente = soe.actor_id.unwrap_or(String::new());
-		
-		OcorrenciaSoe { hora_inicio, hora_fim, mensagem, agente }
-	}
-}
-
-pub fn build_message(empresa:&str,caso: Ocor,soe: Vec<OcorSoe>)->Result<(String,String),TableProcessError>{
-	let text_info = TextInfo::build_from(&caso);
-	let table_info = TableInfo::build_from(&caso,soe)?;
-
-	let title = build_title(&caso)?;
-
-	let message_body = format!("{}{}{}{}",
+	let message_body = format!("{}{}{}<br>{}{}",
 		HTMLHEAD,
-		build_head(text_info,empresa),
-		build_table(table_info,&caso),
+		build_head(info,empresa),
+		build_table(table_info,caso),
+		build_table_eqp(equipamentos),
 		HTMLTAIL
 		);
 
 	Ok((title,message_body))
-}
-
-fn build_title(caso:&Ocor)->Result<String,TableProcessError>{
-	let tipo = match caso.tipo_oco.as_ref()
-		.ok_or(MissignFieldError::new("Tipo de Ocorrencia"))?
-		.as_str(){
-			"C" => Ok("Comandado"),
-			"R" => Ok("Religamento"),
-			"L" => Ok("LockOut"),
-			"N" => Ok("Normaliza"),
-			tipo => Err(MissignFieldError(format!("Tipo {} não é válido",tipo)))
-		}?;
-
-	let subestacao = caso.se.as_ref()
-		.ok_or(MissignFieldError::new("SE"))?;
-
-	let modulo= caso.al.as_ref()
-		.ok_or(MissignFieldError::new("AL"))?;
-	
-	let equipamento = caso.eqp.as_ref()
-		.ok_or(MissignFieldError::new("EQP"))?;
-
-	Ok(format!("{}: {} {} {}",
-		tipo, subestacao, modulo, equipamento)
-	)
 }
 
 
@@ -216,7 +125,7 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	
 	let faltas = format!(r#"
 		<tr>
-			<th colspan="4">CONDIÇÃO DE OPERAÇÃO DE POS-OCORRÊNCIA</th>
+			<th colspan="4">CORRENTES DE FALTA</th>
 		</tr>{}
 		<tr><td>{}</td><td>Correntes de Falta Fase A = {}</td><td>{}</td><td></td></tr>
 		<tr><td>{}</td><td>Correntes de Falta Fase B = {}</td><td>{}</td><td></td></tr>
@@ -246,22 +155,25 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	return format!("<table style=\"width: 1000px;\">\n{}{}{}{}\n</table>",pre_ocor,faltas,eventos,pos_ocor)
 			
 }
-
-fn parse_time(time: MysqlTime)->chrono::NaiveDateTime{
-	match time{
-		MysqlTime { year:0, month:0, day:0, hour:0,
-			minute:0, second:0, second_part:0,
-			.. }=>chrono_def(),
-		MysqlTime { year, month, day,
-			hour, minute, second,
-			.. }=> chrono::NaiveDate::from_ymd(year as i32,month,day)
-				.and_hms(hour,minute,second) 
-		}
-}
-
-
-fn chrono_def()->chrono::NaiveDateTime{
-	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
+fn build_table_eqp(eqps:Vec<PrevEqp>)->String{
+	format!("<table style=\"width: 1000px;\">\n<th colspan=\"4\">Falhas Anteriores Deste Equipamento</th>{}{}\n</table>",
+	HEADROWEQP,
+	eqps.into_iter()
+		.map(|eqp|format!(r#"<tr>
+			<td>{}</td>
+			<td>A = {} B = {} C = {} Neutro = {}</td>
+			<td>{}</td>
+			<td>{}</td>
+			</tr>"#,
+			eqp.inicio,
+			eqp.faltas.fase_a,
+			eqp.faltas.fase_b,
+			eqp.faltas.fase_c,
+			eqp.faltas.fase_n,
+			eqp.prot_sen,
+			eqp.prot_atu))
+			.collect::<Vec<String>>()
+			.join("\n"))
 }
 
 fn hhmmss(secs:f64)->String{
@@ -271,37 +183,13 @@ fn hhmmss(secs:f64)->String{
 	format!("{:0wid$}:{:0wid$}:{:.4}",hour, min%60, sec, wid = 2)
 }
 
-#[derive(Deserialize,Debug)]
-struct FaltasTabela{
-	#[serde(alias = "IaF")]
-	fase_a: f32,
-	#[serde(alias = "IbF")]
-	fase_b: f32,
-	#[serde(alias = "IcF")]
-	fase_c: f32,
-	#[serde(alias = "InF")]
-	fase_n: f32,
-}
-
-#[derive(Deserialize,Debug)]
-struct CondPrePosTabela{
-	#[serde(alias = "P")]
-	potencia_ativa: f32,
-	#[serde(alias = "Ia")]
-	fase_a: f32,
-	#[serde(alias = "Ib")]
-	fase_b: f32,
-	#[serde(alias = "Ic")]
-	fase_c: f32,
-	#[serde(alias = "In")]
-	fase_n: f32,
-}
-
 
 #[cfg(test)]
 mod tests{
 	use super::*;
 	use std::{fs,io::Write};
+	use crate::db::chunks::*;
+	use serde_json::from_str as JSONparse;
 
 
 	#[test]
@@ -343,13 +231,13 @@ mod tests{
 		}
 	}
 
+
+	use diesel::mysql::data_types::{MysqlTimestampType,MysqlTime};
 	fn time_default()->MysqlTime{
-		use diesel::mysql::data_types::MysqlTimestampType;
 		MysqlTime::new(0, 0, 0,
 			0,0,0,0,
 			false, MysqlTimestampType::MYSQL_TIMESTAMP_DATETIME,0)
 	}
-
 
 	#[test]
 	fn proper_hmtl(){
@@ -388,6 +276,8 @@ mod tests{
 				hora_fim: None,
 				complemento: None,
 				mensagem: Some(String::from("mensagem teste 1 soe")),
+				tipo : None,
+				alarme_norm: None,
 				actor_id: None
 			},
 			OcorSoe{
@@ -397,11 +287,41 @@ mod tests{
 				hora_fim: None,
 				complemento: None,
 				mensagem: Some(String::from("mensagem teste 2 soe")),
+				tipo : None,
+				alarme_norm: None,
 				actor_id: None
 			},
 		];
+		let eqp = vec![
+			Ocor{
+				id: 1,
+				se: Some(String::from("SE")),
+				al: Some(String::from("AL")),
+				eqp: Some(String::from("EQP")),
+				hora_update: time_default(),
+				hora_oco:    time_default(),
+				hora_ini:    time_default(),
+				hora_fim:    time_default(),
+				duracao: None,
+				faltas: Some(String::from(r#"{"IaF":96.5,"IbF":8.9,"IcF":94.2,"InF":68.5}"#)),
+				condpre: Some(String::from(r#"{"P":85.5,"Ia":62,"Ib":9.4,"Ic":22.3,"In":68.8}"#)),
+				condpos: Some(String::from(r#"{"P":12.8,"Ia":47.1,"Ib":24.2,"Ic":26.1,"In":0.2}"#)),
+				num_relig: None,
+				prot_atu: None,
+				id_cause: None,
+				email_sended: None,
+				sms_sended: None,
+				cause: None,
+				observacao: None,
+				tipo_oco:Some(String::from("C")),
+				prot_sen: None,
+				modified_by:None
+			}
+		];
 
-		let (_titulo,html) = build_message("EMPRESA TESTE",caso, soe).unwrap();
+		let info = TextInfo::build_from(&caso).unwrap();
+
+		let (_titulo,html) = build_message("EMPRESA TESTE",&caso, info,soe,eqp).unwrap();
 		assert!(f.write_all(html.as_bytes()).is_ok());
 	}
 }

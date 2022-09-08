@@ -56,6 +56,8 @@ table! {
         EventTime -> Nullable<Timestamp>,
         Complemento -> Nullable<Varchar>,
         Mensagem -> Nullable<Varchar>,
+        Tipo -> Nullable<Varchar>,
+        AlrNrmAck -> Nullable<Varchar>,
         ActorID -> Nullable<Char>,
     }
 }

@@ -1,23 +1,23 @@
-mod utilities;
-mod config_info;
 mod message_builder;
 mod error;
-mod schema;
-mod models;
+mod db;
+mod io;
 
 #[macro_use]
 extern crate diesel;
 
 use chrono::Datelike;
-use models::{Ocor,OcorSoe, Email};
-use config_info::{EmailSender};
+use db::models::{Ocor,OcorSoe, Email};
+use db::schema::{
+	Ocorrencia::dsl as ocortb,
+	Ocorrencia_SOE::dsl as soetb,
+	CadastroEmails::dsl as emails
+};
+use db::chunks;
+use io::{config_info::EmailSender, send_email::send_email};
 use diesel::prelude::*;
 use message_builder::build_message;
-use utilities::send_email;
-use error::{TableProcessError};
-use schema::Ocorrencia::dsl as ocortb;
-use schema::Ocorrencia_SOE::dsl as soetb;
-use schema::CadastroEmails::dsl as emails;
+use error::TableProcessError;
 
 //temp para evitar envio de email em prod
 use std::{fs,io::Write};
@@ -28,11 +28,18 @@ fn main(){
         .write(true)
         .append(true)
         .create(true)
+        .open(format!("{}-{}_log.txt",day.year(),day.month()))
+        .expect("Erro em gerar arquivo, terminação completa sem execução.");
+
+	let mut err_file = fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
         .open(format!("{}-{}_err.txt",day.year(),day.month()))
         .expect("Erro em gerar arquivo, terminação completa sem execução.");
 
-	if let Err(err) = laco_de_operacao(&mut log_file){
-		log_error(&mut log_file, err.to_string())	
+	if let Err(err) = laco_de_operacao(&mut log_file, &mut err_file){
+		log_error(&mut err_file, err.to_string())	
 	};
 }
 
@@ -43,8 +50,15 @@ fn log_error(file:&mut fs::File,error:String){
 	assert!(file.write_all(error_msg.as_bytes()).is_ok());
 }
 
-fn laco_de_operacao(file:&mut fs::File)->Result<(),TableProcessError>{
-	let (db,email) = config_info::load_config("config.ini")?;
+fn log_emails(file:&mut fs::File,empresa: &str, ids : Vec<i32>){
+	let now = chrono::Utc::now();	
+	let emails_sent = format!("{}: {} enviou emails com ids: {:?}",now, empresa, ids);
+
+	assert!(file.write_all(emails_sent.as_bytes()).is_ok())
+}
+
+fn laco_de_operacao(log_file:&mut fs::File, err_file:&mut fs::File)->Result<(),TableProcessError>{
+	let (db,email) = io::config_info::load_config("config.ini")?;
 
 	let mut email_table_conection = MysqlConnection::establish(&format!("{}{}",&db.url,&db.email_db))?;
 
@@ -56,17 +70,20 @@ fn laco_de_operacao(file:&mut fs::File)->Result<(),TableProcessError>{
 	for empresa in empresas.into_iter().filter(|emp|emp.is_some()){
 		let emp = empresa.unwrap();
 		match process_table(&db.url, &emp, &email,&mut email_table_conection){
-			Ok(_) => println!("Tabela {} acessada com sucesso",&emp),
+			Ok(ids) => {
+				println!("Tabela {} acessada com sucesso",&emp);
+				log_emails(log_file, &emp, ids);
+			},
 			Err(e) => {
 				println!("Failure at table {}:\n{}",&emp,e);
-				log_error(file, format!("Falha da base da empresa {}:{}",&emp,e));
+				log_error(err_file, format!("Falha da base da empresa {}:{}",&emp,e));
 			} 
 		}
 	}
 	Ok(())
 }
 
-fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlConnection)->Result<(),TableProcessError>{
+fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlConnection)->Result<Vec<i32>,TableProcessError>{
 	let mut connec = MysqlConnection::establish(&format!("{}SGO_{}",url,empresa))?;
 
 	let results = ocortb::Ocorrencia
@@ -74,9 +91,10 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 		.limit(10)
 		.load::<Ocor>(&mut connec)?;
 	
+	let mut sent_emails = Vec::new();
 	if results.is_empty(){
 		println!("Nenhum resultado da tabela SGO_{}",empresa);
-		return Ok(());
+		return Ok(sent_emails);
 	}
 
 	let destinos = emails::CadastroEmails
@@ -90,22 +108,35 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 			.filter(soetb::OcoID.eq(inst_id))
 			.load::<OcorSoe>(&mut connec)?;
 
+		let ex_info = chunks::TextInfo::build_from(&instance)?;
+		
+		let equipamentos = ocortb::Ocorrencia
+			.filter(
+				ocortb::SE.eq(ex_info.subestacao)
+				.and(ocortb::AL.eq(ex_info.modulo)
+				.and(ocortb::EQP.eq(ex_info.equipamento)))
+			)
+			.order_by(ocortb::DtHrOco.desc())
+			.limit(5)
+			.load::<Ocor>(&mut connec)?;
+
 		//retornar o título junto
-		let (title, email_body) = build_message(empresa,instance,ocor_soe)?;
+		let (title, email_body) = build_message(empresa,&instance, ex_info, ocor_soe, equipamentos)?;
 
 		send_email(sender, &destinos, title,email_body)?;
 		diesel::update(ocortb::Ocorrencia.find(inst_id))
 			.set(ocortb::EmailSended.eq("S"))
 			.execute(&mut connec)?;
+		sent_emails.push(inst_id);
 	}
-	Ok(())
+	Ok(sent_emails)
 }
 #[cfg(test)]
 mod tests{
 	use std::collections::HashSet;
 
 use super::*;
-	use crate::config_info;
+	use crate::io::config_info;
 	#[test]
 	fn testing_connect(){
 		let (db,_) = config_info::load_config("config.ini").unwrap();
@@ -151,8 +182,20 @@ use super::*;
 			.filter(soetb::OcoID.eq(inst_id))
 			.load::<OcorSoe>(&mut connec).unwrap();
 
+		let extra = chunks::TextInfo::build_from(&instance).unwrap();
+
+		let equipamentos = ocortb::Ocorrencia
+			.filter(
+				ocortb::SE.eq(extra.subestacao)
+				.and(ocortb::AL.eq(extra.modulo)
+				.and(ocortb::EQP.eq(extra.equipamento)))
+			)
+			.order_by(ocortb::DtHrOco.desc())
+			.limit(5)
+			.load::<Ocor>(&mut connec).unwrap();
+
 		//retornar o título junto
-		let (_ ,email_body) = build_message(&empresa,instance,ocor_soe).unwrap();
+		let (_ ,email_body) = build_message(&empresa,&instance,extra, ocor_soe,equipamentos).unwrap();
 
 		let filename = format!("./testres/{}{}.html",empresa,inst_id);
 		let mut f = std::fs::File::create(filename).unwrap();

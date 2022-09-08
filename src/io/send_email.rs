@@ -6,8 +6,8 @@ use lettre::{Message, SmtpTransport, Transport,
 };
 
 use lettre::message::Mailbox;
-use crate::models::Email;
-use crate::config_info::EmailSender;
+use crate::db::models::Email;
+use crate::io::config_info::EmailSender;
 use crate::error::{MissignFieldError,TableProcessError};
 
 
@@ -56,7 +56,7 @@ pub fn send_email(sender:&EmailSender,destinos:&Vec<Email>, title:String,html:St
 #[cfg(test)]
 mod tests{
 	use super::*;
-	use crate::config_info;
+	use crate::io::config_info;
 	//#[test]
 	#[allow(dead_code)]
 	fn testing_email_send_func(){
