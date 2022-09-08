@@ -51,7 +51,7 @@ fn log_error(file:&mut fs::File,error:String){
 
 fn log_emails(file:&mut fs::File,empresa: &str, ids : Vec<i32>){
 	let now = chrono::Utc::now();	
-	let emails_sent = format!("{}: {} enviou emails com ids: {:?}",now, empresa, ids);
+	let emails_sent = format!("{}: {} enviou emails com ids: {:?}\n",now, empresa, ids);
 
 	assert!(file.write_all(emails_sent.as_bytes()).is_ok())
 }
@@ -69,9 +69,11 @@ fn laco_de_operacao(log_file:&mut fs::File, err_file:&mut fs::File)->Result<(),T
 	for empresa in empresas.into_iter().filter(|emp|emp.is_some()){
 		let emp = empresa.unwrap();
 		match process_table(&db.url, &emp, &email,&mut email_table_conection){
-			Ok(ids) => {
+			Ok(ids_enviados) => {
 				println!("Tabela {} acessada com sucesso",&emp);
-				log_emails(log_file, &emp, ids);
+				if let Some(ids) = ids_enviados{
+					log_emails(log_file, &emp, ids);
+				}
 			},
 			Err(e) => {
 				println!("Failure at table {}:\n{}",&emp,e);
@@ -82,7 +84,7 @@ fn laco_de_operacao(log_file:&mut fs::File, err_file:&mut fs::File)->Result<(),T
 	Ok(())
 }
 
-fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlConnection)->Result<Vec<i32>,TableProcessError>{
+fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlConnection)->Result<Option<Vec<i32>>,TableProcessError>{
 	let mut connec = MysqlConnection::establish(&format!("{}SGO_{}",url,empresa))?;
 
 	let results = ocortb::Ocorrencia
@@ -93,7 +95,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 	let mut sent_emails = Vec::new();
 	if results.is_empty(){
 		println!("Nenhum resultado da tabela SGO_{}",empresa);
-		return Ok(sent_emails);
+		return Ok(None);
 	}
 
 	let destinos = emails::CadastroEmails
@@ -128,7 +130,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 			.execute(&mut connec)?;
 		sent_emails.push(inst_id);
 	}
-	Ok(sent_emails)
+	Ok(Some(sent_emails))
 }
 #[cfg(test)]
 mod tests{

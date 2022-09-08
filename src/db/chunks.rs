@@ -10,8 +10,8 @@ pub struct TextInfo<'a>{
 	pub modulo:&'a str,
 	pub equipamento:&'a str,
 	pub tipo: &'a str,
-	pub inicio: chrono::NaiveDateTime,
-	pub termino:chrono::NaiveDateTime,
+	pub inicio: Option<chrono::NaiveDateTime>,
+	pub termino:Option<chrono::NaiveDateTime>,
 	pub duracao:f64
 }
 
@@ -104,16 +104,16 @@ impl TableInfo{
 }
 
 pub struct OcorrenciaSoe{
-	pub hora_inicio:chrono::NaiveDateTime,
-	pub hora_fim:chrono::NaiveDateTime,
+	pub hora_inicio: Option<chrono::NaiveDateTime>,
+	pub hora_fim: Option<chrono::NaiveDateTime>,
 	pub mensagem:String,
 	pub agente:String
 }
 
 impl OcorrenciaSoe{
 	pub fn build_from(soe:OcorSoe)->Self{
-		let hora_inicio= soe.hora_ini.unwrap_or(chrono_def());
-		let hora_fim = soe.hora_fim.unwrap_or(chrono_def());
+		let hora_inicio= soe.hora_ini;
+		let hora_fim = soe.hora_fim;
 		let mensagem = soe.mensagem.unwrap_or(String::new());
 		let agente = soe.actor_id.unwrap_or(String::new());
 		
@@ -123,7 +123,7 @@ impl OcorrenciaSoe{
 
 pub struct PrevEqp{
 	pub faltas: FaltasTabela,
-	pub inicio: chrono::NaiveDateTime,
+	pub inicio: Option<chrono::NaiveDateTime>,
 	pub prot_sen: String,
 	pub prot_atu: String
 }
@@ -141,22 +141,14 @@ impl PrevEqp{
 	}
 }
 
-
-
-pub fn parse_time(time: MysqlTime)->chrono::NaiveDateTime{
+pub fn parse_time(time: MysqlTime)->Option<chrono::NaiveDateTime>{
 	match time{
 		MysqlTime { year:0, month:0, day:0, hour:0,
 			minute:0, second:0, second_part:0,
-			.. }=>chrono_def(),
+			.. }=>None,
 		MysqlTime { year, month, day,
 			hour, minute, second,
-			.. }=> chrono::NaiveDate::from_ymd(year as i32,month,day)
-				.and_hms(hour,minute,second) 
+			.. }=> Some(chrono::NaiveDate::from_ymd(year as i32,month,day)
+				.and_hms(hour,minute,second))
 		}
 }
-
-
-pub fn chrono_def()->chrono::NaiveDateTime{
-	chrono::NaiveDate::from_ymd(1,1,1).and_hms(1, 1, 1)
-}
-

@@ -142,8 +142,13 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 	);
 
 	let eventos_iner = info.eventos.into_iter()
-		.map(|event| format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-			event.hora_inicio,event.mensagem,event.hora_fim,event.agente))
+		.map(|event|
+			format!("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+			format_time(event.hora_inicio),
+			event.mensagem,
+			format_time(event.hora_fim),
+			event.agente)
+		)
 		.collect::<Vec<String>>()
 		.join("\n");
 
@@ -159,7 +164,7 @@ fn build_table(info:TableInfo,caso:&Ocor)->String{
 			
 }
 fn build_table_eqp(eqps:Vec<PrevEqp>)->String{
-	format!("<table style=\"width: 1000px;\">\n<th colspan=\"4\">Falhas Anteriores Deste Equipamento</th>{}{}\n</table>",
+	format!("<table style=\"width: 1000px;\">\n<th colspan=\"4\">Ocorrências Anteriores</th>{}{}\n</table>",
 	HEADROWEQP,
 	eqps.into_iter()
 		.map(|eqp|format!(r#"<tr>
@@ -179,8 +184,11 @@ fn build_table_eqp(eqps:Vec<PrevEqp>)->String{
 			.join("\n"))
 }
 
-fn format_time(time:chrono::NaiveDateTime)->String{
-	format!("{:0>2}-{:0>2}-{} {}",time.day(),time.month(),time.year(),time.time())
+fn format_time(time:Option<chrono::NaiveDateTime>)->String{
+	match time{
+		Some(t) => format!("{:0>2}-{:0>2}-{} {}",t.day(),t.month(),t.year(),t.time()),
+		None => String::new()
+	}
 }
 
 
@@ -188,7 +196,7 @@ fn hhmmss(secs:f64)->String{
 	let min = secs as u32/ 60;
 	let hour = min/60;
 	let sec = secs%60.0;
-	format!("{:0wid$}:{:0wid$}:{:.4}",hour, min%60, sec, wid = 2)
+	format!("{:0wid$}:{:0wid$}:{:.4} ({}s)",hour, min%60, sec, secs,wid = 2)
 }
 
 
@@ -203,7 +211,7 @@ mod tests{
 	#[test]
 	fn hour_convert(){
 		let secs = 3701.2f64;
-		assert_eq!(hhmmss(secs),String::from("01:01:41.2000"));
+		assert_eq!(hhmmss(secs),String::from("01:01:41.2000 (3701.2s)"));
 	}
 
 	#[test]
