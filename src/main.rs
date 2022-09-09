@@ -120,6 +120,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 				.and(ocortb::AL.eq(ex_info.modulo)
 				.and(ocortb::EQP.eq(ex_info.equipamento)))
 			)
+			.filter(diesel::dsl::not(ocortb::OcoID.eq(inst_id)))
 			.order_by(ocortb::DtHrOco.desc())
 			.limit(5)
 			.load::<Ocor>(&mut connec)?;
@@ -135,6 +136,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 	}
 	Ok(Some(sent_emails))
 }
+
 #[cfg(test)]
 mod tests{
 	use std::collections::HashSet;

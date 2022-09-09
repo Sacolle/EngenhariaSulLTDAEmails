@@ -11,9 +11,6 @@
 			td,th{
 				padding: 2.5px;
 			}
-			.titulos{
-				text-align: center;
-			}
 		</style>
 	</head>
 	<body>
@@ -63,7 +60,7 @@ Termino: {{ termino }}</p>
 			<tr>
 				<th colspan="4">EVENTOS</th>
 			</tr>
-			<tr class="titulos">
+			<tr style="text-align: center">
 				<td>Hora do Evento</td>
 				<td>Mensagem</td>
 				<td>Hora da Gravação</td>
@@ -81,10 +78,10 @@ Termino: {{ termino }}</p>
 		<br>
 		<table style="width:1000px">	
 			<tr>
-				<th colspan="4">Ultimas Occorrências em: {{ subestacao}} {{ modulo}}  {{ equipamento }}</th>
+				<th colspan="4">ÚLTIMAS OCORRÊNCIAS EM: {{ subestacao}} {{ modulo}} {{ equipamento }}</th>
 			</tr>
-			<tr class="titulos">
-				<td>Hora do Evento</td>
+			<tr style="text-align: center">
+				<td>Data Hora Ocorrências</td>
 				<td>Correntes de Falta</td>
 				<td>Proto Sen</td>
 				<td>Proto Atu</td>
