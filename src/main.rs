@@ -1,7 +1,7 @@
-mod message_builder;
 mod error;
 mod db;
 mod io;
+mod templating;
 
 #[macro_use]
 extern crate diesel;
@@ -16,7 +16,10 @@ use db::schema::{
 use db::chunks;
 use io::{config_info::EmailSender, send_email::send_email};
 use diesel::prelude::*;
-use message_builder::build_message;
+
+//use message_builder::build_message;
+use templating::build_from_template;
+
 use error::TableProcessError;
 
 use std::{fs,io::Write};
@@ -122,7 +125,7 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 			.load::<Ocor>(&mut connec)?;
 
 		//retornar o título junto
-		let (title, email_body) = build_message(empresa,&instance, ex_info, ocor_soe, equipamentos)?;
+		let (title, email_body) = build_from_template(empresa,&instance, ex_info, ocor_soe, equipamentos)?;
 
 		send_email(sender, &destinos, title,email_body)?;
 		diesel::update(ocortb::Ocorrencia.find(inst_id))
@@ -198,7 +201,7 @@ mod tests{
 			.load::<Ocor>(&mut connec).unwrap();
 
 		//retornar o título junto
-		let (_ ,email_body) = build_message(&empresa,&instance,extra, ocor_soe,equipamentos).unwrap();
+		let (_ ,email_body) = build_from_template(&empresa,&instance,extra, ocor_soe,equipamentos).unwrap();
 
 		let filename = format!("./testres/{}{}.html",empresa,inst_id);
 		let mut f = std::fs::File::create(filename).unwrap();

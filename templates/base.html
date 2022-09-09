@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>tabela</title>
+		<style>
+			table,td,tr,th{
+				border: 1px solid black;
+			}
+			td,th{
+				padding: 2.5px;
+			}
+			.titulos{
+				text-align: center;
+			}
+		</style>
+	</head>
+	<body>
+		<p>Prezado Sr(a)</p>
+		<p>Voce está recebendo esta mensagem devido a uma ocorrência no sistema elétrico da empresa {{ empresa }}.</p>
+		<p style="white-space: pre-line;">Subestação: {{ subestacao }}
+			Modulo: {{ modulo }}
+			Equipamento: {{ equipamento }}
+		</p>
+		<p style="white-space:pre;">Inicio:     {{ inicio }}
+Termino: {{ termino }}</p>
+		<p>Duração: {{ duracao }}</p>	
+		<table style="width:1000px">	
+			<tr>
+				<th>CORRENTES DE FALTA</th>
+				<th>PRE-OCORRÊNCIA</th>
+				<th>PÓS-RESTABELECIMENTO</th>
+			</tr>
+			<tr>
+				<td></td>
+				<td>Potência Ativa = {{ pre_ocor.potencia_ativa }}</td>
+				<td>Potência Ativa = {{ pos_ocor.potencia_ativa }}</td>
+			</tr>
+			<tr>
+				<td>Correntes de Falta Fase A = {{ faltas.fase_a }}</td>
+				<td>Correntes na Fase A = {{ pre_ocor.fase_a }}</td>
+				<td>Correntes na Fase A = {{ pos_ocor.fase_a }}</td>
+			</tr>
+			<tr>
+				<td>Correntes de Falta Fase B = {{ faltas.fase_b }}</td>
+				<td>Correntes na Fase B = {{ pre_ocor.fase_b }}</td>
+				<td>Correntes na Fase B = {{ pos_ocor.fase_b }}</td>
+			</tr>
+			<tr>
+				<td>Correntes de Falta Fase C = {{ faltas.fase_c }}</td>
+				<td>Correntes na Fase C = {{ pre_ocor.fase_c }}</td>
+				<td>Correntes na Fase C = {{ pos_ocor.fase_c }}</td>
+			</tr>
+			<tr>
+				<td>Correntes de Falta Fase Neutro = {{ faltas.fase_n }}</td>
+				<td>Correntes na Fase Neutro = {{ pre_ocor.fase_n }}</td>
+				<td>Correntes na Fase Neutro = {{ pos_ocor.fase_n }}</td>
+			</tr>
+		</table>
+		<br>
+		<table style="width:1000px">	
+			<tr>
+				<th colspan="4">EVENTOS</th>
+			</tr>
+			<tr class="titulos">
+				<td>Hora do Evento</td>
+				<td>Mensagem</td>
+				<td>Hora da Gravação</td>
+				<td>Operador</td>
+			</tr>
+			{% for soe in ocor_soe %}
+			<tr>
+				<td>{{ soe.hora_inicio }}</td>
+				<td>{{ soe.mensagem }}</td>
+				<td>{{ soe.hora_fim }}</td>
+				<td>{{ soe.agente }}</td>
+			</tr>
+			{% endfor%}
+		</table>
+		<br>
+		<table style="width:1000px">	
+			<tr>
+				<th colspan="4">Ultimas Occorrências em: {{ subestacao}} {{ modulo}}  {{ equipamento }}</th>
+			</tr>
+			<tr class="titulos">
+				<td>Hora do Evento</td>
+				<td>Correntes de Falta</td>
+				<td>Proto Sen</td>
+				<td>Proto Atu</td>
+			</tr>
+			{% for eqp in eqps_ant %}
+			<tr>
+				<td>{{ eqp.inicio }}</td>
+				<td>A = {{ eqp.faltas.fase_a }} B = {{ eqp.faltas.fase_b }} C = {{ eqp.faltas.fase_c }} Neutro = {{ eqp.faltas.fase_n }}</td>
+				<td>{{ eqp.prot_sen }}</td>
+				<td>{{ eqp.prot_atu }}</td>
+			</tr>
+			{% endfor%}
+		</table>
+	</body>
+</html>

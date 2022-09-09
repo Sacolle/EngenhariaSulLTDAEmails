@@ -1,6 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize,Serialize};
 use serde_json::from_str as JSONparse;
 use diesel::mysql::data_types::MysqlTime;
+use chrono::Datelike;
 
 use crate::db::models::{Ocor,OcorSoe};
 use crate::error::{MissignFieldError,TableProcessError,};
@@ -10,9 +11,9 @@ pub struct TextInfo<'a>{
 	pub modulo:&'a str,
 	pub equipamento:&'a str,
 	pub tipo: &'a str,
-	pub inicio: Option<chrono::NaiveDateTime>,
-	pub termino:Option<chrono::NaiveDateTime>,
-	pub duracao:f64
+	pub inicio: String,
+	pub termino:String,
+	pub duracao: String 
 }
 
 impl<'a> TextInfo<'a>{
@@ -39,16 +40,31 @@ impl<'a> TextInfo<'a>{
 			.ok_or(MissignFieldError::new("EQP"))?
 			.as_str();
 		
-		let inicio  = parse_time(caso.hora_ini);
-		let termino = parse_time(caso.hora_fim);
+		let ini  = parse_time(caso.hora_ini);
+		let fim = parse_time(caso.hora_fim);
 			
-		let duracao = caso.duracao.unwrap_or(0.0) as f64;
+		let null_time = chrono::NaiveTime::from_hms(0, 0, 0);
+		let sm_duracao= match ini{
+			Some(i)=>fim.map(|f|f-i),
+			None=>None
+		};
+		let duracao = match sm_duracao{
+			Some(dur)=>{
+				let duration_fmt = null_time + dur;
+				let ms = dur.num_milliseconds()%1000;
+				format!("{},{}",duration_fmt,ms)
+			},
+			None => format!("{}",null_time)
+		};
+
+		let inicio = format_time(ini);
+		let termino = format_time(fim);
 
 		Ok(TextInfo { subestacao, modulo, equipamento, tipo, inicio, termino, duracao})
 	}
 }
 
-#[derive(Deserialize,Debug)]
+#[derive(Deserialize,Serialize,Debug)]
 pub struct FaltasTabela{
 	#[serde(alias = "IaF")]
 	pub fase_a: f32,
@@ -60,7 +76,7 @@ pub struct FaltasTabela{
 	pub fase_n: f32,
 }
 
-#[derive(Deserialize,Debug)]
+#[derive(Deserialize,Serialize,Debug)]
 pub struct CondPrePosTabela{
 	#[serde(alias = "P")]
 	pub potencia_ativa: f32,
@@ -103,17 +119,19 @@ impl TableInfo{
 	}
 }
 
+#[derive(Serialize)]
 pub struct OcorrenciaSoe{
-	pub hora_inicio: Option<chrono::NaiveDateTime>,
-	pub hora_fim: Option<chrono::NaiveDateTime>,
+	pub hora_inicio: String,
+	pub hora_fim: String,
 	pub mensagem:String,
 	pub agente:String
 }
 
 impl OcorrenciaSoe{
 	pub fn build_from(soe:OcorSoe)->Self{
-		let hora_inicio= soe.hora_ini;
-		let hora_fim = soe.hora_fim;
+		let hora_inicio= format_time(soe.hora_evento);
+		let hora_fim = format_time(soe.time_stamp);
+
 		let mensagem = soe.mensagem.unwrap_or(String::new());
 		let agente = soe.actor_id.unwrap_or(String::new());
 		
@@ -121,9 +139,10 @@ impl OcorrenciaSoe{
 	}
 }
 
+#[derive(Serialize)]
 pub struct PrevEqp{
 	pub faltas: FaltasTabela,
-	pub inicio: Option<chrono::NaiveDateTime>,
+	pub inicio: String,
 	pub prot_sen: String,
 	pub prot_atu: String
 }
@@ -134,7 +153,7 @@ impl PrevEqp{
 			caso.faltas.as_ref()
 			.ok_or(MissignFieldError::new("tabelaFaltas"))?
 		)?;
-		let inicio = parse_time(caso.hora_oco);
+		let inicio = format_time(parse_time(caso.hora_oco));
 		let prot_sen = caso.prot_sen.unwrap_or(String::new());
 		let prot_atu = caso.prot_atu.unwrap_or(String::new());
 		Ok(PrevEqp{faltas,inicio,prot_sen,prot_atu})
@@ -151,4 +170,11 @@ pub fn parse_time(time: MysqlTime)->Option<chrono::NaiveDateTime>{
 			.. }=> Some(chrono::NaiveDate::from_ymd(year as i32,month,day)
 				.and_hms(hour,minute,second))
 		}
+}
+
+fn format_time(time:Option<chrono::NaiveDateTime>)->String{
+	match time{
+		Some(t) => format!("{:0>2}-{:0>2}-{} {}",t.day(),t.month(),t.year(),t.time()),
+		None => String::new()
+	}
 }

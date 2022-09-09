@@ -9,7 +9,8 @@ pub enum TableProcessError{
 	EmailParseError(lettre::address::AddressError),
 	SqlQueryError(diesel::result::Error),
 	SqlConnectionError(diesel::ConnectionError),
-	LoadIniError(String)
+	LoadIniError(String),
+	TemplatingError(tera::Error)
 }
 impl fmt::Display for TableProcessError{
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -22,6 +23,7 @@ impl fmt::Display for TableProcessError{
 			Self::SqlQueryError(e) => write!(f,"SQL query failed:\n\t{}",e),
 			Self::SqlConnectionError(e) => write!(f,"Failed to connect to DB:\n\t{}",e),
 			Self::LoadIniError(e)=> write!(f,"Falha em carregar o arquivo Ini:\n\t{}",e),
+			Self::TemplatingError(e)=> write!(f,"Falha no processamento do template:\n\t{}",e),
 		}
 	}
 }
@@ -87,5 +89,11 @@ impl From<diesel::ConnectionError> for TableProcessError{
 impl From<String> for TableProcessError{
 	fn from(e: String) -> Self {
 		TableProcessError::LoadIniError(e)
+	}
+}
+
+impl From<tera::Error> for TableProcessError{
+	fn from(e: tera::Error) -> Self {
+		TableProcessError::TemplatingError(e)
 	}
 }
