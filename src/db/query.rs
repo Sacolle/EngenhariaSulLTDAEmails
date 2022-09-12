@@ -9,7 +9,7 @@ use crate::db::schema::{
 use crate::db::chunks::TextInfo;
 
 
-pub fn equipamentos(connec: &mut MysqlConnection,ex_info:&TextInfo,inst_id:i32)->Result<Vec<Ocor>, result::Error>{
+pub fn equipamentos(connec: &mut MysqlConnection,ex_info:&TextInfo,inst_id:i32,limit:i64)->Result<Vec<Ocor>, result::Error>{
 	ocortb::Ocorrencia
 		.filter(
 			ocortb::SE.eq(ex_info.subestacao)
@@ -18,7 +18,7 @@ pub fn equipamentos(connec: &mut MysqlConnection,ex_info:&TextInfo,inst_id:i32)-
 		)
 		.filter(diesel::dsl::not(ocortb::OcoID.eq(inst_id)))
 		.order_by(ocortb::DtHrOco.desc())
-		.limit(5)
+		.limit(limit)
 		.load::<Ocor>(connec)
 }
 

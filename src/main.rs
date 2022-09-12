@@ -7,13 +7,7 @@ mod templating;
 extern crate diesel;
 
 use chrono::Datelike;
-use db::models::{Ocor,OcorSoe, Email};
-use db::schema::{
-	Ocorrencia::dsl as ocortb,
-	Ocorrencia_SOE::dsl as soetb,
-	CadastroEmails::dsl as emails
-};
-use db::chunks;
+use db::{chunks, query};
 use io::{config_info::EmailSender, send_email::send_email};
 use diesel::prelude::*;
 
@@ -62,16 +56,13 @@ fn log_emails(file:&mut fs::File,empresa: &str, ids : Vec<i32>){
 fn laco_de_operacao(log_file:&mut fs::File, err_file:&mut fs::File)->Result<(),TableProcessError>{
 	let (db,email) = io::config_info::load_config("config.ini")?;
 
-	let mut email_table_conection = MysqlConnection::establish(&format!("{}{}",&db.url,&db.email_db))?;
+	let mut email_table_connection = MysqlConnection::establish(&format!("{}{}",&db.url,&db.email_db))?;
 
-	let empresas = emails::CadastroEmails
-		.select(emails::Empresa)
-		.distinct()
-		.load::<Option<String>>(&mut email_table_conection)?;
+	let empresas = query::empresas(&mut email_table_connection)?;
 
 	for empresa in empresas.into_iter().filter(|emp|emp.is_some()){
 		let emp = empresa.unwrap();
-		match process_table(&db.url, &emp, &email,&mut email_table_conection){
+		match process_table(&db.url, &emp, &email,&mut email_table_connection){
 			Ok(ids_enviados) => {
 				println!("Tabela {} acessada com sucesso",&emp);
 				if let Some(ids) = ids_enviados{
@@ -90,10 +81,7 @@ fn laco_de_operacao(log_file:&mut fs::File, err_file:&mut fs::File)->Result<(),T
 fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlConnection)->Result<Option<Vec<i32>>,TableProcessError>{
 	let mut connec = MysqlConnection::establish(&format!("{}SGO_{}",url,empresa))?;
 
-	let results = ocortb::Ocorrencia
-		.filter(ocortb::EmailSended.eq("N"))
-		.limit(10)
-		.load::<Ocor>(&mut connec)?;
+	let results = query::ocorrencias(&mut connec, 10)?;
 	
 	let mut sent_emails = Vec::new();
 	if results.is_empty(){
@@ -101,37 +89,20 @@ fn process_table(url:&str,empresa:&str,sender:&EmailSender,email_db:&mut MysqlCo
 		return Ok(None);
 	}
 
-	let destinos = emails::CadastroEmails
-		.filter(emails::Empresa.eq(empresa))
-		.load::<Email>(email_db)?;
+	let destinos = query::emails(email_db, empresa)?;
 	
 	for instance in results{
 		let inst_id = instance.id;
 
-		let ocor_soe = soetb::Ocorrencia_SOE
-			.filter(soetb::OcoID.eq(inst_id))
-			.load::<OcorSoe>(&mut connec)?;
-
+		let ocor_soe = query::ocorrencias_soe(&mut connec, inst_id)?;
 		let ex_info = chunks::TextInfo::build_from(&instance)?;
-		
-		let equipamentos = ocortb::Ocorrencia
-			.filter(
-				ocortb::SE.eq(ex_info.subestacao)
-				.and(ocortb::AL.eq(ex_info.modulo)
-				.and(ocortb::EQP.eq(ex_info.equipamento)))
-			)
-			.filter(diesel::dsl::not(ocortb::OcoID.eq(inst_id)))
-			.order_by(ocortb::DtHrOco.desc())
-			.limit(5)
-			.load::<Ocor>(&mut connec)?;
-
+		let equipamentos = query::equipamentos(&mut connec, &ex_info, inst_id, 5)?;
 		//retornar o título junto
 		let (title, email_body) = build_from_template(empresa,&instance, ex_info, ocor_soe, equipamentos)?;
 
 		send_email(sender, &destinos, title,email_body)?;
-		diesel::update(ocortb::Ocorrencia.find(inst_id))
-			.set(ocortb::EmailSended.eq("S"))
-			.execute(&mut connec)?;
+		let _ = query::update_ocorrencias(&mut connec, inst_id)?;
+
 		sent_emails.push(inst_id);
 	}
 	Ok(Some(sent_emails))
@@ -143,6 +114,12 @@ mod tests{
 	use super::*;
 	use crate::io::config_info;
 	use diesel::dsl::not;
+	use db::models::{Ocor,OcorSoe};
+	use db::schema::{
+		Ocorrencia::dsl as ocortb,
+		Ocorrencia_SOE::dsl as soetb,
+		CadastroEmails::dsl as emails
+	};
 	#[test]
 
 	fn testing_connect(){
