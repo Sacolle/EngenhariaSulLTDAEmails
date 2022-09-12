@@ -1,7 +1,21 @@
+use std::collections::HashMap;
+
 use tera::{Context,Tera};
 
 use crate::db::{models::{Ocor,OcorSoe},chunks::{TextInfo,TableInfo,PrevEqp}};
 use crate::error::TableProcessError;
+
+fn round_n_places(args:&HashMap<String,tera::Value>)->tera::Result<tera::Value>{
+	let res = match args.get("num"){
+		Some(num) => args.get("n")
+			.map(|n|format!("{1:.0$}",n.as_i64().unwrap() as usize, num.as_f64().unwrap())),
+		None => None
+	};
+	match res.map(|num|tera::to_value(num).map_err(|e|tera::Error::json(e))){
+		Some(res) => res,
+		None => Err("missing vals".into())
+	}
+}
 
 /*
 * TextInfo contém informações para o header
@@ -9,7 +23,8 @@ use crate::error::TableProcessError;
 * Vec<PrevEqp> contém informações para a tabela dos equipamentos anteriores
 */
 pub fn build_from_template(empresa:&str, caso: &Ocor, info: TextInfo, soe: Vec<OcorSoe>, eqp:Vec<Ocor>)->Result<(String,String),TableProcessError>{
-	let t = Tera::new("templates/*")?;
+	let mut t = Tera::new("templates/*")?;
+	t.register_function("round",round_n_places);
 	let mut ctx = Context::new();
 
 	let table_info = TableInfo::build_from(caso,soe)?;

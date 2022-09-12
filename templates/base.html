@@ -11,17 +11,23 @@
 			td,th{
 				padding: 2.5px;
 			}
+			.txt{
+				margin-top: 0;
+				margin-bottom: 0;
+			}
+			.txt-t{
+				margin-bottom: 0;
+			}
 		</style>
 	</head>
 	<body>
 		<p>Prezado Sr(a)</p>
 		<p>Voce está recebendo esta mensagem devido a uma ocorrência no sistema elétrico da empresa {{ empresa }}.</p>
-		<p style="white-space: pre-line;">Subestação: {{ subestacao }}
-			Modulo: {{ modulo }}
-			Equipamento: {{ equipamento }}
-		</p>
-		<p style="white-space:pre;">Inicio:     {{ inicio }}
-Termino: {{ termino }}</p>
+		<p class="txt-t">Subestação: {{ subestacao }}</p>
+		<p class="txt">Modulo: {{ modulo }}</p>
+		<p class="txt">Equipamento: {{ equipamento }}</p>
+		<p class="txt-t" style="white-space:pre;">Inicio:     {{ inicio }} </p>
+		<p class="txt">Termino: {{ termino }}</p>
 		<p>Duração: {{ duracao }}</p>	
 		<table style="width:1000px">	
 			<tr>
@@ -31,28 +37,28 @@ Termino: {{ termino }}</p>
 			</tr>
 			<tr>
 				<td></td>
-				<td>Potência Ativa = {{ pre_ocor.potencia_ativa }}</td>
-				<td>Potência Ativa = {{ pos_ocor.potencia_ativa }}</td>
+				<td>Potência Ativa = {{ round(num = pre_ocor.potencia_ativa,n = 2) }}</td>
+				<td>Potência Ativa = {{ round(num = pos_ocor.potencia_ativa,n = 2) }}</td>
 			</tr>
 			<tr>
-				<td>Correntes de Falta Fase A = {{ faltas.fase_a }}</td>
-				<td>Correntes na Fase A = {{ pre_ocor.fase_a }}</td>
-				<td>Correntes na Fase A = {{ pos_ocor.fase_a }}</td>
+				<td>Correntes de Falta Fase A = {{ round(num = faltas.fase_a,n = 2) }}</td>
+				<td>Correntes na Fase A = {{ round(num = pre_ocor.fase_a,n = 2) }}</td>
+				<td>Correntes na Fase A = {{ round(num = pos_ocor.fase_a,n = 2) }}</td>
 			</tr>
 			<tr>
-				<td>Correntes de Falta Fase B = {{ faltas.fase_b }}</td>
-				<td>Correntes na Fase B = {{ pre_ocor.fase_b }}</td>
-				<td>Correntes na Fase B = {{ pos_ocor.fase_b }}</td>
+				<td>Correntes de Falta Fase B = {{ round(num = faltas.fase_b, n = 2) }}</td>
+				<td>Correntes na Fase B = {{ round(num = pre_ocor.fase_b, n = 2) }}</td>
+				<td>Correntes na Fase B = {{ round(num = pos_ocor.fase_b, n = 2) }}</td>
 			</tr>
 			<tr>
-				<td>Correntes de Falta Fase C = {{ faltas.fase_c }}</td>
-				<td>Correntes na Fase C = {{ pre_ocor.fase_c }}</td>
-				<td>Correntes na Fase C = {{ pos_ocor.fase_c }}</td>
+				<td>Correntes de Falta Fase C = {{ round(num = faltas.fase_c, n = 2) }}</td>
+				<td>Correntes na Fase C = {{ round(num = pre_ocor.fase_c, n = 2) }}</td>
+				<td>Correntes na Fase C = {{ round(num = pos_ocor.fase_c, n = 2) }}</td>
 			</tr>
 			<tr>
-				<td>Correntes de Falta Fase Neutro = {{ faltas.fase_n }}</td>
-				<td>Correntes na Fase Neutro = {{ pre_ocor.fase_n }}</td>
-				<td>Correntes na Fase Neutro = {{ pos_ocor.fase_n }}</td>
+				<td>Correntes de Falta Fase Neutro = {{ round(num = faltas.fase_n, n = 2) }}</td>
+				<td>Correntes na Fase Neutro = {{ round(num = pre_ocor.fase_n, n = 2) }}</td>
+				<td>Correntes na Fase Neutro = {{ round(num = pos_ocor.fase_n, n = 2) }}</td>
 			</tr>
 		</table>
 		<br>
@@ -89,7 +95,12 @@ Termino: {{ termino }}</p>
 			{% for eqp in eqps_ant %}
 			<tr>
 				<td>{{ eqp.inicio }}</td>
-				<td>A = {{ eqp.faltas.fase_a }} B = {{ eqp.faltas.fase_b }} C = {{ eqp.faltas.fase_c }} Neutro = {{ eqp.faltas.fase_n }}</td>
+				<td>
+					A = {{ round(num = eqp.faltas.fase_a,n = 2) }} 
+					B = {{ round(num = eqp.faltas.fase_b,n = 2) }} 
+					C = {{ round(num = eqp.faltas.fase_c,n = 2) }} 
+					Neutro = {{ round(num = eqp.faltas.fase_n, n = 2) }}
+				</td>
 				<td>{{ eqp.prot_sen }}</td>
 				<td>{{ eqp.prot_atu }}</td>
 			</tr>
